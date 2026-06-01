@@ -178,6 +178,35 @@ type CustomRole struct {
 	Permissions []string `json:"permissions,omitempty"`
 }
 
+// OrgRole is an organization role (the /settings/organization-roles page, whose
+// assignments live under /settings/org_role_assignments). Org roles grant
+// org-wide or all-repo permissions independent of per-repo collaborator grants;
+// Users and Teams record who holds the role and whether the grant is direct or
+// inherited through a team.
+type OrgRole struct {
+	ID          int64              `json:"id"`
+	Name        string             `json:"name"`
+	BaseRole    string             `json:"base_role,omitempty"` // read | triage | write | maintain | admin (empty for org-only custom roles)
+	Source      string             `json:"source,omitempty"`    // "Predefined" | "Organization" | "Enterprise"
+	Permissions []string           `json:"permissions,omitempty"`
+	Users       []OrgRoleAssignee  `json:"users,omitempty"`
+	Teams       []OrgRoleTeamGrant `json:"teams,omitempty"`
+}
+
+// OrgRoleAssignee is a user holding an organization role.
+type OrgRoleAssignee struct {
+	Login      string `json:"login"`
+	Assignment string `json:"assignment,omitempty"` // "direct" | "indirect" | "mixed"
+	IsBot      bool   `json:"is_bot"`
+}
+
+// OrgRoleTeamGrant is a team holding an organization role; every member inherits
+// the role's permissions.
+type OrgRoleTeamGrant struct {
+	Slug       string `json:"slug"`
+	Assignment string `json:"assignment,omitempty"` // "direct" | "indirect"
+}
+
 // CommitActivity summarizes recent commits authored by a single machine/bot
 // identity in a repository. Used to see which agents actually push code.
 type CommitActivity struct {
@@ -243,6 +272,7 @@ type Snapshot struct {
 	ActionsToken             ActionsTokenSettings      `json:"actions_token"`
 	OrgRulesets              []Ruleset                 `json:"org_rulesets,omitempty"`
 	CustomRoles              []CustomRole              `json:"custom_roles,omitempty"`
+	OrgRoles                 []OrgRole                 `json:"org_roles,omitempty"`
 	SelfHostedRunners        []Runner                  `json:"self_hosted_runners,omitempty"`
 	PendingInvitations       []Invitation              `json:"pending_invitations,omitempty"`
 	ActionsPolicy            ActionsPolicy             `json:"actions_policy"`

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -46,6 +47,13 @@ func collectTeamsAndPermissions(ctx context.Context, client *ghclient.Client, or
 	} else {
 		snap.CustomRoles = roles
 		snap.Coverage.OK(model.DataCustomRoles, len(roles))
+	}
+
+	if orgRoles, err := fetchOrgRoles(ctx, client, org); err != nil {
+		snap.Coverage.Missing(model.DataOrgRoles, reasonFor(err, "listing organization roles"))
+	} else {
+		snap.OrgRoles = orgRoles
+		snap.Coverage.OK(model.DataOrgRoles, len(orgRoles))
 	}
 
 	// Custom-property values are org-level (one call), so collect them even in
@@ -497,6 +505,60 @@ func fetchCustomRoles(ctx context.Context, client *ghclient.Client, org string) 
 		out = append(out, model.CustomRole{ID: r.ID, Name: r.Name, BaseRole: r.BaseRole, Permissions: r.Permissions})
 	}
 	return out, nil
+}
+
+// fetchOrgRoles lists the org's organization roles (the /settings/organization-roles
+// page) and, for each, the users and teams assigned to it (the assignments shown
+// on /settings/org_role_assignments). The roles endpoint wraps results in
+// {roles:[...]}; the per-role users/teams endpoints return plain arrays. The
+// per-role assignment calls run with bounded concurrency, each writing a distinct
+// slice element so no locking is needed.
+func fetchOrgRoles(ctx context.Context, client *ghclient.Client, org string) ([]model.OrgRole, error) {
+	var body struct {
+		Roles []struct {
+			ID          int64    `json:"id"`
+			Name        string   `json:"name"`
+			BaseRole    string   `json:"base_role"`
+			Source      string   `json:"source"`
+			Permissions []string `json:"permissions"`
+		} `json:"roles"`
+	}
+	if _, err := client.Get(ctx, "/orgs/"+org+"/organization-roles", nil, &body); err != nil {
+		return nil, err
+	}
+	out := make([]model.OrgRole, len(body.Roles))
+	for i, r := range body.Roles {
+		out[i] = model.OrgRole{ID: r.ID, Name: r.Name, BaseRole: r.BaseRole, Source: r.Source, Permissions: r.Permissions}
+	}
+
+	forEachIndex(ctx, defaultConcurrency, len(out), func(ctx context.Context, i int) {
+		roleID := strconv.FormatInt(out[i].ID, 10)
+		base := "/orgs/" + org + "/organization-roles/" + roleID
+		if users, err := ghclient.GetAll[orgRoleUserDTO](ctx, client, base+"/users", nil); err == nil {
+			for _, u := range users {
+				out[i].Users = append(out[i].Users, model.OrgRoleAssignee{
+					Login: u.Login, Assignment: u.Assignment, IsBot: u.Type == "Bot",
+				})
+			}
+		}
+		if teams, err := ghclient.GetAll[orgRoleTeamDTO](ctx, client, base+"/teams", nil); err == nil {
+			for _, t := range teams {
+				out[i].Teams = append(out[i].Teams, model.OrgRoleTeamGrant{Slug: t.Slug, Assignment: t.Assignment})
+			}
+		}
+	})
+	return out, nil
+}
+
+type orgRoleUserDTO struct {
+	Login      string `json:"login"`
+	Type       string `json:"type"`       // "User" | "Bot"
+	Assignment string `json:"assignment"` // "direct" | "indirect" | "mixed"
+}
+
+type orgRoleTeamDTO struct {
+	Slug       string `json:"slug"`
+	Assignment string `json:"assignment"` // "direct" | "indirect"
 }
 
 type collaboratorDTO struct {
