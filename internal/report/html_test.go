@@ -52,20 +52,22 @@ func TestHTMLContainsKeySections(t *testing.T) {
 		"Not evaluated",
 		"fine-grained PAT policy", // coverage reason
 		"Built by Sunny Systems",
-		"products/scopeward", // footer product link
+		"products/scopeward",     // footer product link
+		"data:image/png;base64,", // Sunny logo embedded, not fetched
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("HTML missing %q", want)
 		}
 	}
 
-	// No JavaScript and no external stylesheet; the only remote asset is the
-	// Sunny logo in the header.
+	// Fully self-contained: no JS, no external stylesheet, and no remotely
+	// fetched assets — the Sunny logo is embedded as a data URI. (href links
+	// are fine; they are user-clicked, not auto-loaded on open.)
 	if strings.Contains(out, "<script") || strings.Contains(out, "<link") {
 		t.Error("HTML report must not pull external scripts or stylesheets")
 	}
-	if c := strings.Count(out, "src="); c != 1 {
-		t.Errorf("expected exactly one remote asset (the Sunny logo), found %d src= references", c)
+	if strings.Contains(out, `src="http`) {
+		t.Error("HTML report must not fetch remote assets; embed them as data URIs instead")
 	}
 
 	// Write a copy for manual inspection when running with -v.
