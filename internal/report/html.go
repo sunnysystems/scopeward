@@ -160,7 +160,7 @@ func gradeColor(grade string) string {
 	case "A", "B":
 		return "#3FB950"
 	case "C", "D":
-		return "#FFB000"
+		return "#FFB61F"
 	default:
 		return "#F85149"
 	}

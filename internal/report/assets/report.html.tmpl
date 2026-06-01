@@ -5,94 +5,132 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>scopeward · {{.OrgLogin}}</title>
 <style>
+  /* Sunny Systems design system v1.0 — fonts are loaded locally when present
+     and fall back to system stacks. No external assets, no network calls:
+     a scopeward report never phones home. */
   :root{
-    --amber:#FFB000; --copper:#B87333; --sand:#E8C9A0;
-    --bg:#16130d; --panel:#1f1a12; --panel2:#251f15; --ink:#f3ece0; --muted:#9a8f7d;
-    --green:#3FB950; --red:#F85149; --line:#322a1d;
+    --amber:#FFB61F; --yellow:#F0C840; --yellow-light:#F5D660; --dark:#332C15;
+    --black:#1A1A1D; --gray-dark:#3A3A3A; --gray-mid:#8F8F8F; --gray-light:#DFDFDF; --white:#FFFFFF;
+    --card:#1C2020; --line:#2A2A2A;
+    --ok:#3FB950; --danger:#F85149;
+    --font-display:'Bricolage Grotesque','Inter',system-ui,-apple-system,"Segoe UI",sans-serif;
+    --font-body:'Inter',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --radius-sm:2px; --radius-md:4px; --radius-lg:8px; --radius-xl:12px;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
-  .wrap{max-width:980px;margin:0 auto;padding:40px 24px 80px}
+  body{margin:0;background:var(--black);color:var(--gray-light);
+    font-family:var(--font-body);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 24px 80px}
   a{color:var(--amber);text-decoration:none}
   a:hover{text-decoration:underline}
-  header.top{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:28px}
-  .brand{font-weight:800;font-size:22px;letter-spacing:-.4px;color:var(--amber)}
-  .brand .dot{color:var(--copper)}
-  .org{font-size:18px;color:var(--ink)}
-  .gen{margin-left:auto;color:var(--muted);font-size:13px}
 
-  .scorecard{display:flex;gap:28px;align-items:center;background:var(--panel);
-    border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin-bottom:14px}
-  .gauge{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  /* Header */
+  header.top{display:flex;align-items:center;gap:12px;padding-bottom:18px}
+  .sunmark{flex:0 0 auto;display:block}
+  .brand{font-family:var(--font-display);font-weight:700;font-size:26px;letter-spacing:-.5px;
+    background:linear-gradient(95deg,var(--amber),var(--yellow-light));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .org{font-family:var(--font-display);font-weight:500;font-size:16px;color:var(--gray-mid)}
+  .gen{margin-left:auto;color:var(--gray-mid);font-size:11px}
+  hr.rule{height:1px;width:60px;background:var(--amber);border:0;margin:0 0 28px}
+
+  /* Scorecard hero */
+  .scorecard{position:relative;display:flex;gap:28px;align-items:center;background:var(--card);
+    border:.5px solid var(--line);border-radius:var(--radius-xl);padding:28px;margin-bottom:14px;overflow:hidden}
+  .scorecard::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--amber)}
+  .gauge{width:118px;height:118px;border-radius:50%;display:flex;align-items:center;justify-content:center;
     flex-direction:column;flex:0 0 auto;
-    background:radial-gradient(closest-side,var(--panel) 79%,transparent 80% 100%),
-      conic-gradient(var(--grade-color) calc(var(--score)*1%), #2f2819 0);}
-  .gauge .val{font-size:30px;font-weight:800;line-height:1}
-  .gauge .grade{font-size:13px;color:var(--muted);margin-top:2px}
-  .scoremeta h1{margin:0 0 6px;font-size:19px}
-  .scoremeta p{margin:0;color:var(--muted)}
-  .tally{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-  .chip{font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--line)}
-  .chip.sev-critical,.chip.sev-high{color:#ffd0cb;background:rgba(248,81,73,.14);border-color:rgba(248,81,73,.4)}
-  .chip.sev-medium{color:#ffe2ad;background:rgba(255,176,0,.14);border-color:rgba(255,176,0,.4)}
-  .chip.sev-low{color:var(--sand);background:rgba(184,115,51,.16);border-color:rgba(184,115,51,.45)}
-  .chip.sev-info{color:var(--muted)}
-  .chip.clean{color:#bfeccb;background:rgba(63,185,80,.14);border-color:rgba(63,185,80,.4)}
+    background:radial-gradient(closest-side,var(--card) 78%,transparent 80% 100%),
+      conic-gradient(var(--grade-color) calc(var(--score)*1%), #2a2f2f 0);}
+  .gauge .val{font-family:var(--font-display);font-size:32px;font-weight:700;line-height:1;color:var(--white)}
+  .gauge .grade{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--gray-mid);margin-top:4px}
+  .scoremeta h1{font-family:var(--font-display);margin:0 0 6px;font-size:22px;font-weight:700;color:var(--white)}
+  .scoremeta p{margin:0;color:var(--gray-mid);font-size:12px}
+  .tally{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
 
-  h2.axis{font-size:14px;text-transform:uppercase;letter-spacing:1.4px;color:var(--copper);
-    margin:34px 0 12px;font-weight:700}
-  .finding{background:var(--panel);border:1px solid var(--line);border-left-width:4px;border-radius:10px;
-    padding:16px 18px;margin-bottom:10px}
-  .finding.sev-critical,.finding.sev-high{border-left-color:var(--red)}
+  /* Severity badges */
+  .chip{display:inline-flex;align-items:center;font-size:10px;font-weight:500;letter-spacing:.3px;
+    text-transform:uppercase;padding:3px 8px;border-radius:var(--radius-sm)}
+  .chip.sev-critical{color:#fff;background:var(--danger)}
+  .chip.sev-high{color:#ffd0cb;background:rgba(248,81,73,.16);border:1px solid rgba(248,81,73,.5)}
+  .chip.sev-medium{color:var(--dark);background:var(--amber)}
+  .chip.sev-low{color:var(--amber);background:transparent;border:1px solid var(--amber)}
+  .chip.sev-info{color:var(--gray-mid);border:1px solid var(--gray-dark)}
+  .chip.clean{color:var(--dark);background:var(--ok)}
+
+  /* Axis heading */
+  h2.axis{font-family:var(--font-display);font-size:13px;text-transform:uppercase;letter-spacing:1.5px;
+    color:var(--amber);margin:38px 0 14px;font-weight:700;display:flex;align-items:center;gap:12px}
+  h2.axis::after{content:'';flex:1;height:.5px;background:var(--line)}
+
+  /* Finding cards */
+  .finding{background:var(--card);border:.5px solid var(--line);border-left:3px solid var(--gray-dark);
+    border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:10px}
+  .finding.sev-critical,.finding.sev-high{border-left-color:var(--danger)}
   .finding.sev-medium{border-left-color:var(--amber)}
-  .finding.sev-low{border-left-color:var(--copper)}
-  .finding.sev-info{border-left-color:var(--muted)}
+  .finding.sev-low{border-left-color:var(--yellow-light)}
+  .finding.sev-info{border-left-color:var(--gray-mid)}
   .finding .head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .finding .title{font-weight:650}
-  .finding .res{color:var(--muted);font-size:13px}
-  .finding .res code{color:var(--sand)}
-  .finding .desc{margin:8px 0 0;color:#ded5c6}
-  .finding .rem{margin:8px 0 0;color:var(--muted);font-size:13.5px}
-  .finding .rem b{color:var(--sand);font-weight:600}
+  .finding .title{font-family:var(--font-display);font-weight:500;font-size:15px;color:var(--white)}
+  .finding .res{color:var(--gray-mid);font-size:12px;margin-top:6px}
+  .finding .res code{font-family:var(--mono);color:var(--yellow-light)}
+  .finding .desc{margin:8px 0 0;color:var(--gray-light);font-size:13px}
+  .finding .rem{margin:8px 0 0;color:var(--gray-mid);font-size:12.5px}
+  .finding .rem b{color:var(--amber);font-weight:500}
   .finding details{margin-top:8px}
-  .finding details summary{cursor:pointer;color:var(--muted);font-size:12.5px}
-  .finding pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
-    padding:10px 12px;overflow:auto;font-size:12.5px;color:var(--sand);margin:8px 0 0}
-  .finding pre.ghfix{color:var(--amber);border-color:rgba(255,176,0,.3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-  .cid{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted)}
+  .finding details summary{cursor:pointer;color:var(--gray-mid);font-size:11px}
+  .finding pre{background:var(--black);border:.5px solid var(--line);border-radius:var(--radius-md);
+    padding:10px 12px;overflow:auto;font-size:12px;color:var(--gray-light);margin:8px 0 0;font-family:var(--mono)}
+  .finding pre.ghfix{color:var(--amber);border-color:rgba(255,182,31,.35)}
+  .cid{font-family:var(--mono);font-size:11px;color:var(--gray-mid)}
 
-  .teamdesign{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:8px}
-  .teamdesign .td-head{font-size:15px;font-weight:600;color:var(--amber);margin:0 0 2px}
-  .teamdesign .td-exp{color:var(--muted);font-size:13px;margin:0 0 10px}
+  /* Team design */
+  .teamdesign{position:relative;background:var(--card);border:.5px solid var(--line);
+    border-radius:var(--radius-lg);padding:16px 18px;margin-top:8px;overflow:hidden}
+  .teamdesign::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--amber)}
+  .teamdesign .td-head{font-family:var(--font-display);font-size:15px;font-weight:500;color:var(--amber);margin:0 0 2px}
+  .teamdesign .td-exp{color:var(--gray-mid);font-size:12px;margin:0 0 10px}
   .teamdesign .td-list{margin:6px 0 10px;padding-left:20px}
   .teamdesign .td-list li{margin:2px 0}
-  .teamdesign .td-clean{color:var(--green);margin:6px 0 10px}
-  .teamdesign table.td-own{border-collapse:collapse;font-size:14px;margin:4px 0 6px}
+  .teamdesign .td-clean{color:var(--ok);margin:6px 0 10px}
+  .teamdesign table.td-own{border-collapse:collapse;font-size:13px;margin:4px 0 6px}
   .teamdesign table.td-own td{padding:4px 14px 4px 0}
-  .teamdesign table.td-own td:last-child{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--sand)}
-  .teamdesign .td-gaps-h{margin:10px 0 2px}
+  .teamdesign table.td-own td:last-child{font-family:var(--mono);color:var(--yellow-light)}
+  .teamdesign .td-gaps-h{margin:10px 0 2px;color:var(--gray-light)}
 
-  table.cov{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
-  table.cov td{padding:7px 10px;border-bottom:1px solid var(--line)}
+  /* Coverage */
+  table.cov{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+  table.cov td{padding:7px 10px;border-bottom:.5px solid var(--line)}
   table.cov .mark{width:24px;text-align:center;font-weight:700}
-  .ok{color:var(--green)} .partial{color:var(--amber)} .missing{color:var(--red)}
-  .reason{color:var(--muted);font-size:13px}
-  .neval{color:#ded5c6;margin:6px 0}
+  .ok{color:var(--ok)} .partial{color:var(--amber)} .missing{color:var(--danger)}
+  .reason{color:var(--gray-mid);font-size:12px}
+  .neval{color:var(--gray-light);margin:6px 0}
   .neval .cid{margin-left:6px}
-  .empty{color:var(--muted);font-style:italic}
-  footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;
-    display:flex;gap:8px;align-items:center}
-  footer b{color:var(--copper)}
+  .empty{color:var(--gray-mid);font-style:italic}
+
+  /* Footer */
+  footer{margin-top:48px;padding-top:18px;border-top:.5px solid var(--line);color:var(--gray-mid);
+    font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  footer .by{margin-left:auto;color:var(--gray-mid)}
+  footer b{color:var(--amber);font-weight:500}
 </style>
 </head>
 <body><div class="wrap">
 
 <header class="top">
-  <span class="brand">scopeward<span class="dot">.</span></span>
+  <svg class="sunmark" width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="12" cy="13.5" r="4" fill="#FFB61F"/>
+    <g stroke="#FFB61F" stroke-width="1.7" stroke-linecap="round">
+      <path d="M12 3.5v2.6"/><path d="M5.4 6.9 7.2 8.7"/><path d="M18.6 6.9 16.8 8.7"/>
+      <path d="M2.6 14h2.4"/><path d="M19 14h2.4"/>
+    </g>
+  </svg>
+  <span class="brand">scopeward</span>
   <span class="org">{{.OrgDisplay}}</span>
   <span class="gen">generated {{.GeneratedAt}}</span>
 </header>
+<hr class="rule">
 
 <section class="scorecard">
   <div class="gauge" style="--score:{{.Score.Value}};--grade-color:{{.GradeColor}}">
@@ -162,6 +200,6 @@
 </tr>{{end}}
 </table>
 
-<footer>Generated locally by <b>scopeward</b> · read-only · no data left your machine</footer>
+<footer>Generated locally by <b>scopeward</b> · read-only · no data left your machine<span class="by">Built by Sunny Systems</span></footer>
 
 </div></body></html>
