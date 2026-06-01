@@ -188,7 +188,7 @@ func groupDetailView(g groupData, width int) string {
 	}
 
 	b.WriteString(ui.Label.Render(fmt.Sprintf("Affected (%d)", len(g.findings))))
-	b.WriteString(ui.Subtle.Render("  — press ↵ to expand"))
+	b.WriteString(ui.Subtle.Render("  press ↵ to expand"))
 	b.WriteString("\n")
 	for _, f := range g.findings {
 		name := f.Resource.Name

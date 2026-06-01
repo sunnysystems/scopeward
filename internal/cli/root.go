@@ -103,7 +103,7 @@ func Execute() int {
 	root.PersistentFlags().StringSliceVar(&opts.skip, "skip", nil, "exclude these axes or check IDs (repeatable)")
 	root.PersistentFlags().StringVar(&opts.baseline, "baseline", "", "prior JSON report to diff against (reports new/resolved findings)")
 	root.PersistentFlags().BoolVar(&opts.newOnly, "new-only", false, "with --baseline: show and fail only on findings new since the baseline")
-	root.PersistentFlags().BoolVar(&opts.cache, "cache", false, "cache ETags on disk so unchanged data returns 304 (faster, saves rate limit; may lag just-changed settings — use --refresh after applying fixes)")
+	root.PersistentFlags().BoolVar(&opts.cache, "cache", false, "cache ETags on disk so unchanged data returns 304 (faster, saves rate limit; may lag just-changed settings; use --refresh after applying fixes)")
 	root.PersistentFlags().BoolVar(&opts.refresh, "refresh", false, "with --cache: ignore cached data this run and rewrite it with fresh responses")
 	root.PersistentFlags().StringVar(&opts.fixScript, "fix-script", "", "write suggested gh fix commands (commented, never run) to this .sh path")
 
@@ -209,7 +209,7 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 	prog := progress.New(os.Stderr, term.IsStderrTTY())
 	prog.SetRateFunc(client.RateStatus)
 	client.SetOnWait(func(d time.Duration) {
-		prog.Notice(fmt.Sprintf("GitHub rate limit reached — pausing %s for reset", d.Round(time.Second)))
+		prog.Notice(fmt.Sprintf("GitHub rate limit reached; pausing %s for reset", d.Round(time.Second)))
 	})
 	prog.Start()
 	audit, err := buildAudit(ctx, client, subject, userMode, self, opts, prog)
@@ -322,7 +322,7 @@ func writeFixScript(opts *options, audit report.Audit) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stderr, ui.Subtle.Render("fix script written to ")+ui.Accent.Render(opts.fixScript)+ui.Subtle.Render(" (commands are commented — review before running)"))
+	fmt.Fprintln(os.Stderr, ui.Subtle.Render("fix script written to ")+ui.Accent.Render(opts.fixScript)+ui.Subtle.Render(" (commands are commented; review before running)"))
 	return nil
 }
 

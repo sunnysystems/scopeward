@@ -153,7 +153,7 @@ func renderCoverage(out io.Writer, cov *model.CoverageReport) {
 		}
 		detail := ""
 		if c.Reason != "" {
-			detail = ui.Subtle.Render(" — " + c.Reason)
+			detail = ui.Subtle.Render(" (" + c.Reason + ")")
 		}
 		fmt.Fprintf(out, "  %s %s%s\n", mark, string(c.Kind), detail)
 	}

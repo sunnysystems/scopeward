@@ -52,7 +52,7 @@ func renderProbeText(out io.Writer, src auth.Source, p *ghclient.Probe) {
 	if len(p.Scopes) > 0 {
 		line("Scopes", strings.Join(p.Scopes, ", "))
 	} else if p.TokenType == ghclient.TokenFineGrainedPAT {
-		line("Scopes", ui.Subtle.Render("(fine-grained token — permissions resolve per call)"))
+		line("Scopes", ui.Subtle.Render("(fine-grained token; permissions resolve per call)"))
 	} else {
 		line("Scopes", ui.Subtle.Render("(none reported)"))
 	}

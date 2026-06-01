@@ -55,7 +55,7 @@ func (c repoNoPushProtection) Run(_ context.Context, s *model.Snapshot) []model.
 			Axis:        model.AxisCodeSecurity,
 			Resource:    repoRef(s.Org.Login, r),
 			Evidence:    map[string]any{"repo": r.Name, "private": r.Private, "secret_scanning": r.SecretScanning, "push_protection": false},
-			Description: "Without push protection, a committed secret is only detected after it has already been pushed (if at all) — by then it must be treated as leaked and rotated. Push protection blocks the commit at the source.",
+			Description: "Without push protection, a committed secret is only detected after it has already been pushed (if at all); by then it must be treated as leaked and rotated. Push protection blocks the commit at the source.",
 			Remediation: remediation,
 			GHFix:       fx.cmd,
 			GHVerify:    fx.verify,

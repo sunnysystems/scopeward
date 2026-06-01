@@ -113,28 +113,28 @@ func (td *teamDesign) computeGaps() []string {
 	switch {
 	case td.members < 10:
 		if td.maxDepth > 1 {
-			gaps = append(gaps, "team nesting adds little at this size — flat teams are easier to reason about")
+			gaps = append(gaps, "team nesting adds little at this size; flat teams are easier to reason about")
 		}
 	case td.members < 50:
 		if td.teams == 0 {
-			gaps = append(gaps, "no teams exist yet — access is likely granted person-by-person rather than by team")
+			gaps = append(gaps, "no teams exist yet; access is likely granted person-by-person rather than by team")
 		}
 	case td.members < 200:
 		if td.maxDepth < 2 && td.teams > 0 {
-			gaps = append(gaps, "teams are flat — grouping squads under an area team makes inherited access clearer at this size")
+			gaps = append(gaps, "teams are flat; grouping squads under an area team makes inherited access clearer at this size")
 		}
 	default:
 		if td.maxDepth < 2 {
-			gaps = append(gaps, "the team hierarchy is flat for an org this large — mirroring the org chart usually needs structure")
+			gaps = append(gaps, "the team hierarchy is flat for an org this large; mirroring the org chart usually needs structure")
 		}
 		gaps = append(gaps, "at this scale, team membership should be provisioned from your identity provider (SSO/SCIM) rather than by hand")
 	}
 	if td.reposTotal > 0 && td.reposOwnedByTeam < td.reposTotal {
 		n := td.reposTotal - td.reposOwnedByTeam
-		gaps = append(gaps, fmt.Sprintf("%d of %d repositories have no owning team — their access comes only from direct grants", n, td.reposTotal))
+		gaps = append(gaps, fmt.Sprintf("%d of %d repositories have no owning team; their access comes only from direct grants", n, td.reposTotal))
 	}
 	if td.ghost > 0 {
-		gaps = append(gaps, fmt.Sprintf("%d team(s) grant no repository access — overhead without value", td.ghost))
+		gaps = append(gaps, fmt.Sprintf("%d team(s) grant no repository access; overhead without value", td.ghost))
 	}
 	return gaps
 }

@@ -61,7 +61,7 @@ func (c copilotSeatInactive) Run(_ context.Context, s *model.Snapshot) []model.F
 			Axis:        model.AxisAIAgents,
 			Resource:    model.ResourceRef{Type: "member", Name: seat.Login, URL: "https://github.com/" + seat.Login},
 			Evidence:    ev,
-			Description: "This Copilot seat is assigned but not being used. It is recurring spend, and it is AI code-generation access granted to an account that is not exercising it — access that should be intentional, not leftover.",
+			Description: "This Copilot seat is assigned but not being used. It is recurring spend, and it is AI code-generation access granted to an account that is not exercising it; access that should be intentional, not leftover.",
 			Remediation: "Reclaim seats that are no longer needed; confirm the assignment is still intentional for the rest.",
 			DocsURL:     "https://docs.github.com/copilot/managing-copilot/managing-github-copilot-in-your-organization/managing-access-to-github-copilot-in-your-organization/revoking-access-to-github-copilot-for-members-of-your-organization",
 		}, ghRemoveCopilotSeat(s.Org.Login, seat.Login)))

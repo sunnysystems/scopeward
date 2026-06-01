@@ -202,13 +202,13 @@ func reasonFor(err error, action string) string {
 	case http.StatusForbidden:
 		const hint = "check token scope, owner role, or SSO authorization"
 		if msg != "" {
-			return fmt.Sprintf("%s: forbidden — %s (%s)", action, msg, hint)
+			return fmt.Sprintf("%s: forbidden, %s (%s)", action, msg, hint)
 		}
 		return fmt.Sprintf("%s: forbidden (%s)", action, hint)
 	case http.StatusNotFound:
 		const hint = "feature may not be enabled for this org/plan, or the resource is absent"
 		if msg != "" {
-			return fmt.Sprintf("%s: not available — %s (%s)", action, msg, hint)
+			return fmt.Sprintf("%s: not available, %s (%s)", action, msg, hint)
 		}
 		return fmt.Sprintf("%s: not available (%s)", action, hint)
 	}

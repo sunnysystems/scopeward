@@ -133,7 +133,7 @@ func (c agentInventory) Run(_ context.Context, s *model.Snapshot) []model.Findin
 		Axis:        model.AxisAIAgents,
 		Resource:    orgRef(s.Org),
 		Evidence:    map[string]any{"agents": summary},
-		Description: "These non-human identities push code to your repositories. Treat each as an actor whose credential, scope, and necessity should be governed like a human's — especially as AI coding agents proliferate.",
+		Description: "These non-human identities push code to your repositories. Treat each as an actor whose credential, scope, and necessity should be governed like a human's, especially as AI coding agents proliferate.",
 		Remediation: "Review the list: confirm each agent is expected, tie it to an owner, and ensure its write scope matches its job.",
 		DocsURL:     "https://docs.github.com/apps/overview",
 	}}
@@ -169,7 +169,7 @@ func (c unidentifiedCommitter) Run(_ context.Context, s *model.Snapshot) []model
 			Resource:    model.ResourceRef{Type: "agent", Name: a.Login, URL: "https://github.com/" + strings.TrimSuffix(a.Login, "[bot]")},
 			Evidence:    map[string]any{"login": a.Login, "commits": a.Commits, "repos": a.Repos},
 			Description: "This machine identity pushes commits but does not correspond to a GitHub App installed on the org or a recognized platform bot. It may be an unmanaged automation, a personal token acting as a bot, or an AI agent set up outside governance.",
-			Remediation: "Identify what credential this bot uses (App, deploy key, or PAT), assign an owner, and bring it under the org's app/token policy — or remove its access.",
+			Remediation: "Identify what credential this bot uses (App, deploy key, or PAT), assign an owner, and bring it under the org's app/token policy, or remove its access.",
 			DocsURL:     "https://docs.github.com/organizations/managing-programmatic-access-to-your-organization",
 		})
 	}

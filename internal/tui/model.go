@@ -280,7 +280,7 @@ func (m *appModel) syncDetail() {
 	case groupItem:
 		m.viewport.SetContent(groupDetailView(v.g, m.viewport.Width))
 	default:
-		m.viewport.SetContent(ui.Subtle.Render("No findings — every evaluated check passed."))
+		m.viewport.SetContent(ui.Subtle.Render("No findings. Every evaluated check passed."))
 	}
 }
 

@@ -40,7 +40,7 @@ func (c openSecretAlerts) Run(_ context.Context, s *model.Snapshot) []model.Find
 			Resource:    repoRef(s.Org.Login, r),
 			Evidence:    map[string]any{"repo": r.Name, "open_alerts": n},
 			Description: "Secret scanning has found credentials committed to this repository that are still unresolved. A committed secret must be assumed compromised: anyone with read access (and anyone the history later reaches) can use it.",
-			Remediation: "Rotate the exposed credentials now, then resolve the alerts. Removing the commit is not enough — the secret was already exposed and must be invalidated.",
+			Remediation: "Rotate the exposed credentials now, then resolve the alerts. Removing the commit is not enough; the secret was already exposed and must be invalidated.",
 			DocsURL:     "https://docs.github.com/code-security/secret-scanning/managing-alerts-from-secret-scanning",
 		})
 	}

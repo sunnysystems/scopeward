@@ -90,7 +90,7 @@ func (c webhookHygiene) Run(_ context.Context, s *model.Snapshot) []model.Findin
 			Axis:        model.AxisNonHuman,
 			Resource:    it.res,
 			Evidence:    map[string]any{"url": h.URL, "has_secret": h.HasSecret, "insecure_ssl": h.InsecureSSL, "issues": reasons},
-			Description: "Webhooks send event payloads to an external endpoint. Without a secret the receiver cannot verify deliveries actually came from GitHub, and with SSL verification off the payload — which can include tokens — is exposed to interception.",
+			Description: "Webhooks send event payloads to an external endpoint. Without a secret the receiver cannot verify deliveries actually came from GitHub, and with SSL verification off the payload (which can include tokens) is exposed to interception.",
 			Remediation: "Configure a webhook secret and verify the signature on the receiver; enable SSL verification and use an https endpoint.",
 			DocsURL:     "https://docs.github.com/webhooks/using-webhooks/securing-your-webhooks",
 		}

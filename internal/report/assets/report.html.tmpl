@@ -121,7 +121,7 @@
   {{if .ResourceName}}<div class="res">{{.ResourceType}}: {{if .ResourceURL}}<a href="{{.ResourceURL}}">{{.ResourceName}}</a>{{else}}<code>{{.ResourceName}}</code>{{end}}</div>{{end}}
   <p class="desc">{{.Description}}</p>
   {{if .Remediation}}<p class="rem"><b>Fix:</b> {{.Remediation}}</p>{{end}}
-  {{if .GHFix}}<pre class="ghfix" title="scopeward never runs this — review before running">{{.GHFix}}{{if .GHVerify}}
+  {{if .GHFix}}<pre class="ghfix" title="scopeward never runs this; review before running">{{.GHFix}}{{if .GHVerify}}
 
 # verify: {{.GHVerify}}{{end}}</pre>{{end}}
   {{if .Evidence}}<details><summary>evidence</summary><pre>{{.Evidence}}</pre></details>{{end}}
@@ -130,7 +130,7 @@
 {{end}}
 {{end}}
 
-{{if not .Axes}}<p class="empty">No findings — every evaluated check passed.</p>{{end}}
+{{if not .Axes}}<p class="empty">No findings. Every evaluated check passed.</p>{{end}}
 
 {{with .TeamDesign}}
 <h2 class="axis">Team Design</h2>

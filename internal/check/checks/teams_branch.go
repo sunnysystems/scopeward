@@ -43,7 +43,7 @@ func (c unprotectedDefaultBranch) Run(_ context.Context, s *model.Snapshot) []mo
 				"private":        r.Private,
 				"org_plan":       s.Org.Plan,
 			},
-			Description: "Anyone with write access can push — or force-push — directly to this branch with no pull request, review, or status check. That removes the main guardrail against mistakes and malicious or AI-agent commits reaching production code.",
+			Description: "Anyone with write access can push (or force-push) directly to this branch with no pull request, review, or status check. That removes the main guardrail against mistakes and malicious or AI-agent commits reaching production code.",
 			Remediation: branchRemediation(r.Private, s.Org.Plan),
 			DocsURL:     "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets",
 		}

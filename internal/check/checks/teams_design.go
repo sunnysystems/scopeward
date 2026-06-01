@@ -96,7 +96,7 @@ func (c orphanTeam) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 			Axis:        model.AxisTeams,
 			Resource:    teamRef(s.Org.Login, t),
 			Evidence:    map[string]any{"slug": t.Slug, "members": len(t.Members)},
-			Description: "With no maintainer, no one is responsible for reviewing who is added or removed from this team, so its membership — and therefore the repository access it grants — drifts without oversight.",
+			Description: "With no maintainer, no one is responsible for reviewing who is added or removed from this team, so its membership (and therefore the repository access it grants) drifts without oversight.",
 			Remediation: "Assign at least one maintainer who owns this team's membership and access.",
 			GHFix:       fmt.Sprintf("gh api -X PUT orgs/%s/teams/%s/memberships/USERNAME -f role=maintainer", s.Org.Login, t.Slug),
 			GHVerify:    fmt.Sprintf("gh api orgs/%s/teams/%s/members?role=maintainer --jq '.[].login'", s.Org.Login, t.Slug),
@@ -157,7 +157,7 @@ func (singletonTeam) Meta() check.CheckMeta {
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevLow,
 		RequiresData:    []model.DataKind{model.DataTeamMembers},
-		Description:     "A team with a single member usually models access to one person — effectively a direct grant wearing a team's clothes.",
+		Description:     "A team with a single member usually models access to one person; effectively a direct grant wearing a team's clothes.",
 	}
 }
 
@@ -175,7 +175,7 @@ func (c singletonTeam) Run(_ context.Context, s *model.Snapshot) []model.Finding
 			Axis:        model.AxisTeams,
 			Resource:    teamRef(s.Org.Login, t),
 			Evidence:    map[string]any{"slug": t.Slug, "member": t.Members[0], "repo_grants": len(t.RepoGrants)},
-			Description: "A single-member team grants access to exactly one person, which is what a direct grant does — but with extra structure to maintain. It often signals access that was personalized rather than role-based.",
+			Description: "A single-member team grants access to exactly one person, which is what a direct grant does, but with extra structure to maintain. It often signals access that was personalized rather than role-based.",
 			Remediation: "If the access is role-based, fold this person into a shared team for that role. If it is genuinely personal, consider whether they need it at all.",
 			DocsURL:     teamsDocsURL,
 		})
@@ -269,19 +269,19 @@ func tierGaps(tier teamSizeTier, teams, members, maxDepth int) []string {
 	switch {
 	case members < 10:
 		if maxDepth > 1 {
-			gaps = append(gaps, "team nesting exists but adds little at this size — flat teams are easier to reason about")
+			gaps = append(gaps, "team nesting exists but adds little at this size; flat teams are easier to reason about")
 		}
 	case members < 50:
 		if teams == 0 {
-			gaps = append(gaps, "no teams exist yet — access is likely granted person-by-person rather than by team")
+			gaps = append(gaps, "no teams exist yet; access is likely granted person-by-person rather than by team")
 		}
 	case members < 200:
 		if maxDepth < 2 && teams > 0 {
-			gaps = append(gaps, "teams are flat — at this size grouping squads under an area team makes inherited access clearer")
+			gaps = append(gaps, "teams are flat; at this size grouping squads under an area team makes inherited access clearer")
 		}
 	default:
 		if maxDepth < 2 {
-			gaps = append(gaps, "the team hierarchy is flat for an org this large — mirroring the org chart usually needs structure")
+			gaps = append(gaps, "the team hierarchy is flat for an org this large; mirroring the org chart usually needs structure")
 		}
 	}
 	if tier.wantSSO {

@@ -21,7 +21,7 @@ func FixScript(w io.Writer, a Audit) {
 	org := a.Snapshot.Org.Login
 
 	fmt.Fprintln(w, "#!/usr/bin/env bash")
-	fmt.Fprintf(w, "# scopeward — suggested fixes for %s\n", org)
+	fmt.Fprintf(w, "# scopeward: suggested fixes for %s\n", org)
 	if !a.Snapshot.CollectedAt.IsZero() {
 		fmt.Fprintf(w, "# data collected: %s\n", a.Snapshot.CollectedAt.Format("2006-01-02 15:04 MST"))
 	}
@@ -29,7 +29,7 @@ func FixScript(w io.Writer, a Audit) {
 	fmt.Fprintln(w, "# scopeward is READ-ONLY: it did NOT run any of these commands.")
 	fmt.Fprintln(w, "# Review each block, uncomment the command you want, and run it yourself.")
 	fmt.Fprintln(w, "# Requires the GitHub CLI authenticated with an admin-scoped token (gh auth login).")
-	fmt.Fprintln(w, "# Findings without a safe one-command fix are not listed — see the full report.")
+	fmt.Fprintln(w, "# Findings without a safe one-command fix are not listed; see the full report.")
 	fmt.Fprintln(w, "#")
 	fmt.Fprintln(w, "# Nothing below runs until you remove the leading '# ' from a command line.")
 	fmt.Fprintln(w, "# Commands are independent: a failure on one (e.g. a private repo that needs")

@@ -43,7 +43,7 @@ func (c agentOnUnprotectedBranch) Run(_ context.Context, s *model.Snapshot) []mo
 			Axis:        model.AxisAIAgents,
 			Resource:    repoRef(s.Org.Login, r),
 			Evidence:    map[string]any{"repo": r.Name, "default_branch": r.DefaultBranch, "agents": bots},
-			Description: "Bot/agent identities (" + strings.Join(bots, ", ") + ") commit to this repository, whose default branch has no protection. An automated or AI agent can therefore write directly to main with no pull request or review — the highest-leverage path for a misbehaving agent to ship code.",
+			Description: "Bot/agent identities (" + strings.Join(bots, ", ") + ") commit to this repository, whose default branch has no protection. An automated or AI agent can therefore write directly to main with no pull request or review; the highest-leverage path for a misbehaving agent to ship code.",
 			Remediation: "Protect the default branch (require a pull request and review) so even automated changes go through a gate, and scope each agent's write access to what it needs.",
 			DocsURL:     "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets",
 		})

@@ -44,7 +44,7 @@ func (c patNoExpiry) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 				URL:  "https://github.com/" + p.OwnerLogin,
 			},
 			Evidence:    map[string]any{"owner": p.OwnerLogin, "permission_count": len(p.Permissions)},
-			Description: "This token has access to org resources and no expiry, so it remains a valid credential indefinitely — including after the owner changes roles or leaves. Leaked or forgotten, it is durable access no one is watching.",
+			Description: "This token has access to org resources and no expiry, so it remains a valid credential indefinitely, including after the owner changes roles or leaves. Leaked or forgotten, it is durable access no one is watching.",
 			Remediation: "Require an expiration on fine-grained PATs via org policy, and ask the owner to reissue this token with a bounded lifetime.",
 			DocsURL:     "https://docs.github.com/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization",
 		})

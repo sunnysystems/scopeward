@@ -58,7 +58,7 @@ func (c staleRepo) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 			Axis:        model.AxisHygiene,
 			Resource:    repoRef(s.Org.Login, r),
 			Evidence:    map[string]any{"repo": r.Name, "pushed_at": r.PushedAt.Format(time.RFC3339), "days_since_push": days, "private": r.Private},
-			Description: "This repository has not received a commit in over a year but is not archived. Abandoned repos keep their collaborators, deploy keys, webhooks, and secrets active — access that survives offboarding and is rarely reviewed.",
+			Description: "This repository has not received a commit in over a year but is not archived. Abandoned repos keep their collaborators, deploy keys, webhooks, and secrets active; access that survives offboarding and is rarely reviewed.",
 			Remediation: "If the repo is no longer needed, archive it (which makes it read-only and removes it from active governance noise) or delete it. If it is still needed, confirm its access and credentials are still appropriate.",
 			DocsURL:     "https://docs.github.com/repositories/archiving-a-github-repository/archiving-repositories",
 		}, ghArchiveRepo(s.Org.Login, r.Name)))

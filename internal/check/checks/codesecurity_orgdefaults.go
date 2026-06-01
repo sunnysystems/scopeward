@@ -23,7 +23,7 @@ func init() {
 		sev:   model.SevMedium,
 		get:   func(o model.Organization) *bool { return o.PushProtectionDefault },
 		short: "New repositories are created without secret-scanning push protection",
-		desc:  "Without push protection, secrets are only caught after they are already committed and pushed — push protection blocks them at commit time, which is the difference between a near-miss and a real leak.",
+		desc:  "Without push protection, secrets are only caught after they are already committed and pushed; push protection blocks them at commit time, which is the difference between a near-miss and a real leak.",
 		fix:   "Create a Code Security configuration with push protection enabled and set it as the org default (Settings → Code security → Configurations).",
 	})
 	check.Register(orgDefault{

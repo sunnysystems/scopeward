@@ -16,7 +16,7 @@ func Markdown(w io.Writer, a Audit) {
 	if a.Snapshot.Org.Name != "" {
 		org = fmt.Sprintf("%s (%s)", a.Snapshot.Org.Name, a.Snapshot.Org.Login)
 	}
-	fmt.Fprintf(w, "# scopeward — %s\n\n", org)
+	fmt.Fprintf(w, "# scopeward: %s\n\n", org)
 	fmt.Fprintf(w, "**Governance score: %d/100 (%s)**\n\n", a.Score.Value, a.Score.Grade)
 
 	if tally := severityTally(a.Score); len(tally) > 0 {
@@ -70,7 +70,7 @@ func Markdown(w io.Writer, a Audit) {
 	if skipped := a.Report.Skipped; len(skipped) > 0 {
 		fmt.Fprint(w, "## Not evaluated\n\n")
 		for _, s := range skipped {
-			fmt.Fprintf(w, "- ~ %s (`%s`) — needs %s\n", s.Title, s.CheckID, joinKinds(s.Missing))
+			fmt.Fprintf(w, "- ~ %s (`%s`): needs %s\n", s.Title, s.CheckID, joinKinds(s.Missing))
 		}
 		fmt.Fprintln(w)
 	}
@@ -88,7 +88,7 @@ func Markdown(w io.Writer, a Audit) {
 		}
 		line := fmt.Sprintf("- %s %s", mark, c.Kind)
 		if c.Reason != "" {
-			line += " — " + c.Reason
+			line += " (" + c.Reason + ")"
 		}
 		fmt.Fprintln(w, line)
 	}
