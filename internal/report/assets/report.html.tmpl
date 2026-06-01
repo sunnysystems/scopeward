@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>scopeward · {{.OrgLogin}}</title>
 <style>
-  /* Sunny Systems design system v1.0 — fonts are loaded locally when present
-     and fall back to system stacks. No external assets, no network calls:
-     a scopeward report never phones home. */
+  /* Sunny Systems design system v1.0 — inline CSS, no JS. Fonts load locally
+     when present and fall back to system stacks. The only remote asset is the
+     Sunny logo loaded in the header. */
   :root{
     --amber:#FFB61F; --yellow:#F0C840; --yellow-light:#F5D660; --dark:#332C15;
     --black:#1A1A1D; --gray-dark:#3A3A3A; --gray-mid:#8F8F8F; --gray-light:#DFDFDF; --white:#FFFFFF;
@@ -27,7 +27,8 @@
 
   /* Header */
   header.top{display:flex;align-items:center;gap:12px;padding-bottom:18px}
-  .sunmark{flex:0 0 auto;display:block}
+  .sunlogo{flex:0 0 auto;display:block;height:26px;width:auto}
+  .hsep{flex:0 0 auto;width:1px;height:20px;background:var(--line)}
   .brand{font-family:var(--font-display);font-weight:700;font-size:26px;letter-spacing:-.5px;
     background:linear-gradient(95deg,var(--amber),var(--yellow-light));
     -webkit-background-clip:text;background-clip:text;color:transparent}
@@ -119,13 +120,8 @@
 <body><div class="wrap">
 
 <header class="top">
-  <svg class="sunmark" width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <circle cx="12" cy="13.5" r="4" fill="#FFB61F"/>
-    <g stroke="#FFB61F" stroke-width="1.7" stroke-linecap="round">
-      <path d="M12 3.5v2.6"/><path d="M5.4 6.9 7.2 8.7"/><path d="M18.6 6.9 16.8 8.7"/>
-      <path d="M2.6 14h2.4"/><path d="M19 14h2.4"/>
-    </g>
-  </svg>
+  <img class="sunlogo" src="https://sunnysystems.com.br/images/logo-hor-white.png" alt="Sunny Systems" height="26">
+  <span class="hsep"></span>
   <span class="brand">scopeward</span>
   <span class="org">{{.OrgDisplay}}</span>
   <span class="gen">generated {{.GeneratedAt}}</span>
@@ -200,6 +196,6 @@
 </tr>{{end}}
 </table>
 
-<footer>Generated locally by <b>scopeward</b> · read-only · no data left your machine<span class="by">Built by Sunny Systems</span></footer>
+<footer>Generated locally by <a href="https://sunnysystems.com.br/products/scopeward"><b>scopeward</b></a><span class="by">Built by Sunny Systems</span></footer>
 
 </div></body></html>

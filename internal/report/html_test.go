@@ -51,16 +51,21 @@ func TestHTMLContainsKeySections(t *testing.T) {
 		"ai-refactor[bot]",
 		"Not evaluated",
 		"fine-grained PAT policy", // coverage reason
-		"no data left your machine",
+		"Built by Sunny Systems",
+		"products/scopeward", // footer product link
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("HTML missing %q", want)
 		}
 	}
 
-	// Must be self-contained: no external stylesheet/script references.
-	if strings.Contains(out, "<link") || strings.Contains(out, "src=") {
-		t.Error("HTML report references external assets; must be self-contained")
+	// No JavaScript and no external stylesheet; the only remote asset is the
+	// Sunny logo in the header.
+	if strings.Contains(out, "<script") || strings.Contains(out, "<link") {
+		t.Error("HTML report must not pull external scripts or stylesheets")
+	}
+	if c := strings.Count(out, "src="); c != 1 {
+		t.Errorf("expected exactly one remote asset (the Sunny logo), found %d src= references", c)
 	}
 
 	// Write a copy for manual inspection when running with -v.
