@@ -3,8 +3,9 @@
 # scopeward
 
 **The guardian of scope.** A local-first, read-only auditor for GitHub
-organization governance — human identities, teams & permissions, non-human
-(machine) identities, and the 2026 angle: the **AI agents committing your code**.
+organization governance. It covers human identities, teams & permissions,
+non-human (machine) identities, and the 2026 angle: the **AI agents committing
+your code**.
 
 [![license](https://img.shields.io/github/license/sunnysystems/scopeward?color=d98324)](LICENSE)
 [![go](https://img.shields.io/github/go-mod/go-version/sunnysystems/scopeward?color=d98324)](go.mod)
@@ -19,8 +20,8 @@ One command. Zero config. Nothing hosted. Built by [Sunny Systems](https://githu
 
 `scopeward` connects to GitHub with a **read-only** token, scores your
 organization's governance posture across **53 checks in seven axes**, and tells
-you exactly what to fix — without ever writing to GitHub, persisting your token,
-or sending a single byte off your machine.
+you exactly what to fix, all without ever writing to GitHub, persisting your
+token, or sending a single byte off your machine.
 
 ```text
   scopeward · audit · acme-co
@@ -50,14 +51,14 @@ or sending a single byte off your machine.
 
 Most audit tools stop at humans and 2FA. The risk in 2026 lives elsewhere:
 
-- **Non-human identities** — GitHub Apps, OAuth Apps, classic vs fine-grained
+- **Non-human identities:** GitHub Apps, OAuth Apps, classic vs fine-grained
   PATs, deploy keys, webhooks, Actions secrets, self-hosted runners, and the
   default `GITHUB_TOKEN` write permission. The machine accounts that quietly
   hold more access than any person.
-- **AI agents** — `scopeward` inventories which bot/machine identities actually
+- **AI agents:** `scopeward` inventories which bot/machine identities actually
   **commit code**, correlates each to its credential and write breadth, and
   flags agents committing with over-broad scope or onto unprotected branches.
-  Governing who — human *or* agent — pushes code, and with what scope, is the
+  Governing who (human *or* agent) pushes code, and with what scope, is the
   whole point.
 
 ## Install
@@ -94,10 +95,10 @@ scopeward tui --org my-org             # browse findings in an interactive TUI
 | `--format json` | machine-readable findings + coverage for pipelines |
 | `--format sarif` | SARIF 2.1.0 for GitHub code scanning / security tooling |
 | `--format markdown` | Markdown (rendered in-terminal on a TTY, raw otherwise) |
-| `--html report.html [--open]` | self-contained, Sunny-branded HTML report — no server, opens in the browser |
+| `--html report.html [--open]` | self-contained, Sunny-branded HTML report; no server, opens in the browser |
 | `--fail-on high` | exit non-zero when a finding at/above a severity exists (CI gate) |
 | `--baseline prior.json [--new-only]` | diff against a prior run; report or fail only on *new* findings |
-| `--fix-script fixes.sh` | write suggested `gh` remediation commands — **all commented out**, nothing runs until you uncomment |
+| `--fix-script fixes.sh` | write suggested `gh` remediation commands, **all commented out**; nothing runs until you uncomment |
 
 ### Exit codes
 
@@ -144,7 +145,7 @@ read-only classic-PAT scopes:
 | `admin:org` | 2FA status, SSO, org apps & default workflow token (read paths) |
 | `read:user` | member activity signals |
 
-Missing scopes never fail the run — affected checks degrade to *not evaluated*
+Missing scopes never fail the run. Affected checks degrade to *not evaluated*,
 and the gap is shown up front and in the coverage report. Some checks
 (fine-grained PAT inventory, custom roles) require GitHub Enterprise and are
 reported as not evaluated elsewhere.
