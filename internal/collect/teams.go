@@ -1,0 +1,548 @@
+package collect
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"github.com/sunnysystems/scopeward/internal/ghclient"
+	"github.com/sunnysystems/scopeward/internal/model"
+)
+
+// collectTeamsAndPermissions gathers teams, repositories, and the direct
+// (non-team) collaborator grants on each repo. The per-repo grant calls run with
+// bounded concurrency.
+func collectTeamsAndPermissions(ctx context.Context, client *ghclient.Client, org string, snap *model.Snapshot, prog Reporter, opts Options) {
+	teams, err := fetchTeams(ctx, client, org)
+	if err != nil {
+		snap.Coverage.Missing(model.DataTeams, reasonFor(err, "listing teams"))
+	} else {
+		snap.Teams = teams
+		snap.Coverage.OK(model.DataTeams, len(teams))
+	}
+
+	repos, err := fetchRepos(ctx, client, org)
+	if err != nil {
+		snap.Coverage.Missing(model.DataRepos, reasonFor(err, "listing repositories"))
+		snap.Coverage.Missing(model.DataRepoDirectCollaborators, "repositories could not be listed")
+		return
+	}
+	snap.Repos = repos
+	snap.Coverage.OK(model.DataRepos, len(repos))
+
+	if rulesets, err := fetchOrgRulesets(ctx, client, org); err != nil {
+		snap.Coverage.Missing(model.DataOrgRulesets, reasonFor(err, "listing org rulesets"))
+	} else {
+		snap.OrgRulesets = rulesets
+		snap.Coverage.OK(model.DataOrgRulesets, len(rulesets))
+	}
+
+	if roles, err := fetchCustomRoles(ctx, client, org); err != nil {
+		snap.Coverage.Missing(model.DataCustomRoles, reasonFor(err, "listing custom repository roles"))
+	} else {
+		snap.CustomRoles = roles
+		snap.Coverage.OK(model.DataCustomRoles, len(roles))
+	}
+
+	// Custom-property values are org-level (one call), so collect them even in
+	// --quick mode, mapping each repo's values onto its Repo entry.
+	if props, err := fetchCustomProperties(ctx, client, org); err != nil {
+		snap.Coverage.Missing(model.DataCustomProperties, reasonFor(err, "reading repository custom properties"))
+	} else {
+		n := 0
+		for i := range snap.Repos {
+			if v, ok := props[snap.Repos[i].Name]; ok {
+				snap.Repos[i].Properties = v
+				n++
+			}
+		}
+		snap.Coverage.OK(model.DataCustomProperties, n)
+	}
+
+	if opts.Quick {
+		for _, k := range perRepoKinds {
+			snap.Coverage.Missing(k, "skipped in --quick mode (org-level only)")
+		}
+		for _, k := range perTeamKinds {
+			snap.Coverage.Missing(k, "skipped in --quick mode (org-level only)")
+		}
+		return
+	}
+	collectTeamDetails(ctx, client, org, snap)
+	collectRepoDetails(ctx, client, org, snap, prog, opts)
+}
+
+// perTeamKinds are the DataKinds produced only by the per-team detail pass.
+var perTeamKinds = []model.DataKind{model.DataTeamMembers, model.DataTeamRepos}
+
+// collectTeamDetails fills each team's members, maintainers, and repo grants in
+// a single bounded-concurrency pass. Each goroutine writes a distinct slice
+// element, so the team data needs no locking. Skipped entirely if teams could
+// not be listed.
+func collectTeamDetails(ctx context.Context, client *ghclient.Client, org string, snap *model.Snapshot) {
+	if !snap.Coverage.Available(model.DataTeams) || len(snap.Teams) == 0 {
+		snap.Coverage.Missing(model.DataTeamMembers, "teams could not be listed")
+		snap.Coverage.Missing(model.DataTeamRepos, "teams could not be listed")
+		return
+	}
+
+	var members, repos covTally
+	forEachIndex(ctx, defaultConcurrency, len(snap.Teams), func(ctx context.Context, i int) {
+		t := &snap.Teams[i]
+
+		if all, err := fetchTeamMembers(ctx, client, org, t.Slug, "all"); err != nil {
+			members.fail(reasonFor(err, "listing team members"))
+		} else {
+			t.Members = all
+			members.add(len(all))
+			// Maintainers are a subset; only worth a second call when the team has members.
+			if len(all) > 0 {
+				if maint, err := fetchTeamMembers(ctx, client, org, t.Slug, "maintainer"); err == nil {
+					t.Maintainers = maint
+				}
+			}
+		}
+
+		if g, err := fetchTeamRepos(ctx, client, org, t.Slug); err != nil {
+			repos.fail(reasonFor(err, "listing team repositories"))
+		} else {
+			t.RepoGrants = g
+			repos.add(len(g))
+		}
+	})
+
+	members.record(snap.Coverage, model.DataTeamMembers, len(snap.Teams))
+	repos.record(snap.Coverage, model.DataTeamRepos, len(snap.Teams))
+}
+
+// collectRepoDetails fills each repo's direct collaborators, deploy keys, and
+// webhooks in a single bounded-concurrency pass. Each goroutine writes a
+// distinct slice element, so the repo data needs no locking; only the per-kind
+// coverage bookkeeping is synchronized.
+func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string, snap *model.Snapshot, prog Reporter, opts Options) {
+	var grants, keys, hooks, commits, protection, security, alerts, workflows, codeowners covTally
+	now := Now()
+
+	// Build the target list: non-archived repos, deterministically ordered, and
+	// optionally capped by --max-repos.
+	var targets []int
+	for i := range snap.Repos {
+		if !snap.Repos[i].Archived {
+			targets = append(targets, i)
+		}
+	}
+	sort.Slice(targets, func(a, b int) bool { return snap.Repos[targets[a]].Name < snap.Repos[targets[b]].Name })
+	total := len(targets)
+	capped := false
+	if opts.MaxRepos > 0 && len(targets) > opts.MaxRepos {
+		targets = targets[:opts.MaxRepos]
+		capped = true
+	}
+	attempted := len(targets)
+
+	stage := fmt.Sprintf("scanning %d repositories", attempted)
+	if capped {
+		stage = fmt.Sprintf("scanning %d of %d repositories (--max-repos)", attempted, total)
+	}
+	prog.Stage(stage)
+	prog.SetRepoProgress(0, attempted)
+	var scanned atomic.Int64
+
+	forEachIndex(ctx, defaultConcurrency, len(targets), func(ctx context.Context, t int) {
+		r := &snap.Repos[targets[t]]
+		defer func() { prog.SetRepoProgress(int(scanned.Add(1)), attempted) }()
+
+		if g, err := fetchRepoDirectCollaborators(ctx, client, org, r.Name); err != nil {
+			grants.fail(reasonFor(err, "listing direct collaborators"))
+		} else {
+			r.DirectCollaborators = g
+			grants.add(len(g))
+		}
+
+		if k, err := fetchDeployKeys(ctx, client, org, r.Name); err != nil {
+			keys.fail(reasonFor(err, "listing deploy keys"))
+		} else {
+			r.DeployKeys = k
+			keys.add(len(k))
+		}
+
+		if w, err := fetchRepoWebhooks(ctx, client, org, r.Name); err != nil {
+			hooks.fail(reasonFor(err, "listing repository webhooks"))
+		} else {
+			r.Webhooks = w
+			hooks.add(len(w))
+		}
+
+		if bc, err := fetchRecentBotCommitters(ctx, client, org, r.Name, now); err != nil {
+			commits.fail(reasonFor(err, "scanning commit authors"))
+		} else {
+			r.BotCommitters = bc
+			commits.add(len(bc))
+		}
+
+		if p, err := fetchDefaultBranchProtected(ctx, client, org, r.Name, r.DefaultBranch); err != nil {
+			protection.fail(reasonFor(err, "reading branch protection"))
+		} else if p != nil {
+			r.DefaultBranchProtected = p
+			protection.add(1)
+			if *p {
+				// Only protected branches have classic-protection detail worth fetching.
+				if pr, force, checks, derr := fetchBranchProtectionDetail(ctx, client, org, r.Name, r.DefaultBranch); derr == nil {
+					r.BranchReqPRReview, r.BranchAllowForcePush, r.BranchReqStatusChecks = pr, force, checks
+				}
+			}
+		}
+
+		if ss, pp, err := fetchRepoSecurity(ctx, client, org, r.Name); err != nil {
+			security.fail(reasonFor(err, "reading code security settings"))
+		} else {
+			r.SecretScanning = ss
+			r.PushProtection = pp
+			security.add(1)
+		}
+
+		// Open secret-scanning alerts only exist where scanning is on; skip the
+		// call otherwise to avoid guaranteed 404s.
+		if r.SecretScanning != nil && *r.SecretScanning {
+			if n, err := fetchOpenSecretAlerts(ctx, client, org, r.Name); err != nil {
+				alerts.fail(reasonFor(err, "counting open secret-scanning alerts"))
+			} else if n != nil {
+				r.OpenSecretAlerts = n
+				alerts.add(1)
+			}
+		}
+
+		if wf, err := fetchWorkflowIssues(ctx, client, org, r.Name); err != nil {
+			workflows.fail(reasonFor(err, "scanning Actions workflows"))
+		} else {
+			r.WorkflowIssues = wf
+			workflows.add(len(wf))
+		}
+
+		if present, teams, err := fetchCodeowners(ctx, client, org, r.Name); err != nil {
+			codeowners.fail(reasonFor(err, "reading CODEOWNERS"))
+		} else {
+			applyCodeowners(r, present, teams)
+			codeowners.add(1)
+		}
+	})
+
+	grants.record(snap.Coverage, model.DataRepoDirectCollaborators, attempted)
+	keys.record(snap.Coverage, model.DataDeployKeys, attempted)
+	hooks.record(snap.Coverage, model.DataRepoWebhooks, attempted)
+	commits.record(snap.Coverage, model.DataCommitAuthors, attempted)
+	protection.record(snap.Coverage, model.DataBranchProtection, attempted)
+	security.record(snap.Coverage, model.DataRepoSecurity, attempted)
+	alerts.record(snap.Coverage, model.DataOpenSecretAlerts, attempted)
+	workflows.record(snap.Coverage, model.DataWorkflows, attempted)
+	codeowners.record(snap.Coverage, model.DataCodeowners, attempted)
+
+	// When capped, downgrade the otherwise-OK per-repo coverage to partial so the
+	// report never reads as if every repo was scanned.
+	if capped {
+		note := fmt.Sprintf("scanned %d of %d repos (--max-repos)", attempted, total)
+		for _, k := range perRepoKinds {
+			if c, ok := snap.Coverage.Get(k); ok && c.Status == model.CoverageOK {
+				snap.Coverage.Partial(k, c.Count, note)
+			}
+		}
+	}
+}
+
+type teamDTO struct {
+	Slug    string   `json:"slug"`
+	Name    string   `json:"name"`
+	ID      int64    `json:"id"`
+	Privacy string   `json:"privacy"`
+	Parent  *teamDTO `json:"parent"`
+}
+
+func fetchTeams(ctx context.Context, client *ghclient.Client, org string) ([]model.Team, error) {
+	dtos, err := ghclient.GetAll[teamDTO](ctx, client, "/orgs/"+org+"/teams", nil)
+	if err != nil {
+		return nil, err
+	}
+	teams := make([]model.Team, 0, len(dtos))
+	for _, t := range dtos {
+		team := model.Team{Slug: t.Slug, Name: t.Name, ID: t.ID, Privacy: t.Privacy}
+		if t.Parent != nil {
+			team.ParentSlug = t.Parent.Slug
+		}
+		teams = append(teams, team)
+	}
+	return teams, nil
+}
+
+// fetchTeamMembers lists a team's members filtered by role ("all" or
+// "maintainer"), returning their logins.
+func fetchTeamMembers(ctx context.Context, client *ghclient.Client, org, slug, role string) ([]string, error) {
+	q := map[string][]string{"role": {role}}
+	dtos, err := ghclient.GetAll[teamMemberDTO](ctx, client, "/orgs/"+org+"/teams/"+slug+"/members", q)
+	if err != nil {
+		return nil, err
+	}
+	logins := make([]string, 0, len(dtos))
+	for _, d := range dtos {
+		logins = append(logins, d.Login)
+	}
+	return logins, nil
+}
+
+type teamMemberDTO struct {
+	Login string `json:"login"`
+}
+
+// fetchTeamRepos lists the repositories a team grants access to, with the
+// permission normalized to a single level.
+func fetchTeamRepos(ctx context.Context, client *ghclient.Client, org, slug string) ([]model.TeamRepoGrant, error) {
+	dtos, err := ghclient.GetAll[teamRepoDTO](ctx, client, "/orgs/"+org+"/teams/"+slug+"/repos", nil)
+	if err != nil {
+		return nil, err
+	}
+	grants := make([]model.TeamRepoGrant, 0, len(dtos))
+	for _, d := range dtos {
+		grants = append(grants, model.TeamRepoGrant{
+			Repo:       d.Name,
+			Permission: d.permissionLevel(),
+		})
+	}
+	return grants, nil
+}
+
+// teamRepoDTO is a repo as returned by the team-repos endpoint: the repo name
+// plus the team's permission object on it.
+type teamRepoDTO struct {
+	Name        string `json:"name"`
+	Permissions struct {
+		Admin    bool `json:"admin"`
+		Maintain bool `json:"maintain"`
+		Push     bool `json:"push"`
+		Triage   bool `json:"triage"`
+		Pull     bool `json:"pull"`
+	} `json:"permissions"`
+}
+
+func (d teamRepoDTO) permissionLevel() string {
+	switch {
+	case d.Permissions.Admin:
+		return "admin"
+	case d.Permissions.Maintain:
+		return "maintain"
+	case d.Permissions.Push:
+		return "write"
+	case d.Permissions.Triage:
+		return "triage"
+	default:
+		return "read"
+	}
+}
+
+// fetchCustomProperties lists each repository's org custom-property values,
+// keyed by repository name. Property names are lowercased so lookups are
+// case-insensitive. Available on any plan; an org with no properties yields an
+// empty map rather than an error.
+func fetchCustomProperties(ctx context.Context, client *ghclient.Client, org string) (map[string]map[string]string, error) {
+	dtos, err := ghclient.GetAll[repoPropertyValuesDTO](ctx, client, "/orgs/"+org+"/properties/values", nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]map[string]string, len(dtos))
+	for _, d := range dtos {
+		vals := make(map[string]string, len(d.Properties))
+		for _, p := range d.Properties {
+			vals[strings.ToLower(p.PropertyName)] = p.value()
+		}
+		out[d.RepositoryName] = vals
+	}
+	return out, nil
+}
+
+type repoPropertyValuesDTO struct {
+	RepositoryName string             `json:"repository_name"`
+	Properties     []propertyValueDTO `json:"properties"`
+}
+
+type propertyValueDTO struct {
+	PropertyName string          `json:"property_name"`
+	Value        json.RawMessage `json:"value"` // string, or array of strings, or null
+}
+
+// value renders a property value as a string: a JSON string verbatim, an array
+// joined by commas, anything else by its raw JSON. Empty when null.
+func (p propertyValueDTO) value() string {
+	if len(p.Value) == 0 || string(p.Value) == "null" {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(p.Value, &s) == nil {
+		return s
+	}
+	var arr []string
+	if json.Unmarshal(p.Value, &arr) == nil {
+		return strings.Join(arr, ",")
+	}
+	return string(p.Value)
+}
+
+type repoDTO struct {
+	Name          string     `json:"name"`
+	ID            int64      `json:"id"`
+	Private       bool       `json:"private"`
+	Archived      bool       `json:"archived"`
+	PushedAt      *time.Time `json:"pushed_at"`
+	DefaultBranch string     `json:"default_branch"`
+}
+
+func fetchRepos(ctx context.Context, client *ghclient.Client, org string) ([]model.Repo, error) {
+	dtos, err := ghclient.GetAll[repoDTO](ctx, client, "/orgs/"+org+"/repos", nil)
+	if err != nil {
+		return nil, err
+	}
+	repos := make([]model.Repo, 0, len(dtos))
+	for _, r := range dtos {
+		repos = append(repos, model.Repo{
+			Name: r.Name, ID: r.ID, Private: r.Private, Archived: r.Archived,
+			PushedAt: r.PushedAt, DefaultBranch: r.DefaultBranch,
+		})
+	}
+	return repos, nil
+}
+
+// fetchDefaultBranchProtected reports whether a repo's default branch is
+// protected (by classic branch protection or a ruleset). A nil result means the
+// answer is unknown (empty repo / no default branch), distinct from "false".
+func fetchDefaultBranchProtected(ctx context.Context, client *ghclient.Client, org, repo, branch string) (*bool, error) {
+	if branch == "" {
+		return nil, nil
+	}
+	var dto struct {
+		Protected bool `json:"protected"`
+	}
+	if _, err := client.Get(ctx, "/repos/"+org+"/"+repo+"/branches/"+branch, nil, &dto); err != nil {
+		if ghclient.StatusCode(err) == 404 {
+			return nil, nil // empty repo or branch gone
+		}
+		return nil, err
+	}
+	return &dto.Protected, nil
+}
+
+// fetchBranchProtectionDetail reads the classic branch-protection settings for a
+// branch. The endpoint 404s when the branch is protected only by a ruleset (not
+// classic protection), in which case all returned pointers are nil so the
+// quality check skips it rather than reporting a false weakness.
+func fetchBranchProtectionDetail(ctx context.Context, client *ghclient.Client, org, repo, branch string) (reqPR, allowForce, reqChecks *bool, err error) {
+	var dto struct {
+		RequiredPullRequestReviews *struct {
+			RequiredApprovingReviewCount int `json:"required_approving_review_count"`
+		} `json:"required_pull_request_reviews"`
+		AllowForcePushes *struct {
+			Enabled bool `json:"enabled"`
+		} `json:"allow_force_pushes"`
+		RequiredStatusChecks *struct {
+			Contexts []string `json:"contexts"`
+		} `json:"required_status_checks"`
+	}
+	if _, e := client.Get(ctx, "/repos/"+org+"/"+repo+"/branches/"+branch+"/protection", nil, &dto); e != nil {
+		if ghclient.StatusCode(e) == 404 {
+			return nil, nil, nil, nil // ruleset-protected or not classically protected
+		}
+		return nil, nil, nil, e
+	}
+	pr := dto.RequiredPullRequestReviews != nil && dto.RequiredPullRequestReviews.RequiredApprovingReviewCount > 0
+	force := dto.AllowForcePushes != nil && dto.AllowForcePushes.Enabled
+	checks := dto.RequiredStatusChecks != nil
+	return &pr, &force, &checks, nil
+}
+
+// fetchOrgRulesets lists the organization's repository rulesets.
+func fetchOrgRulesets(ctx context.Context, client *ghclient.Client, org string) ([]model.Ruleset, error) {
+	type rulesetDTO struct {
+		ID          int64  `json:"id"`
+		Name        string `json:"name"`
+		Target      string `json:"target"`
+		Enforcement string `json:"enforcement"`
+	}
+	dtos, err := ghclient.GetAll[rulesetDTO](ctx, client, "/orgs/"+org+"/rulesets", nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.Ruleset, 0, len(dtos))
+	for _, r := range dtos {
+		out = append(out, model.Ruleset{ID: r.ID, Name: r.Name, Target: r.Target, Enforcement: r.Enforcement})
+	}
+	return out, nil
+}
+
+// fetchCustomRoles lists the org's custom repository roles (the /settings/roles
+// page). The endpoint wraps results in {custom_roles:[...]}.
+func fetchCustomRoles(ctx context.Context, client *ghclient.Client, org string) ([]model.CustomRole, error) {
+	var body struct {
+		CustomRoles []struct {
+			ID          int64    `json:"id"`
+			Name        string   `json:"name"`
+			BaseRole    string   `json:"base_role"`
+			Permissions []string `json:"permissions"`
+		} `json:"custom_roles"`
+	}
+	if _, err := client.Get(ctx, "/orgs/"+org+"/custom-repository-roles", nil, &body); err != nil {
+		return nil, err
+	}
+	out := make([]model.CustomRole, 0, len(body.CustomRoles))
+	for _, r := range body.CustomRoles {
+		out = append(out, model.CustomRole{ID: r.ID, Name: r.Name, BaseRole: r.BaseRole, Permissions: r.Permissions})
+	}
+	return out, nil
+}
+
+type collaboratorDTO struct {
+	Login       string `json:"login"`
+	ID          int64  `json:"id"`
+	Type        string `json:"type"`
+	Permissions struct {
+		Admin    bool `json:"admin"`
+		Maintain bool `json:"maintain"`
+		Push     bool `json:"push"`
+		Triage   bool `json:"triage"`
+		Pull     bool `json:"pull"`
+	} `json:"permissions"`
+}
+
+// permissionLevel normalizes the permissions object to the highest single level.
+func (c collaboratorDTO) permissionLevel() string {
+	switch {
+	case c.Permissions.Admin:
+		return "admin"
+	case c.Permissions.Maintain:
+		return "maintain"
+	case c.Permissions.Push:
+		return "write"
+	case c.Permissions.Triage:
+		return "triage"
+	default:
+		return "read"
+	}
+}
+
+// fetchRepoDirectCollaborators lists collaborators granted directly on a repo
+// (affiliation=direct excludes access inherited via team membership).
+func fetchRepoDirectCollaborators(ctx context.Context, client *ghclient.Client, org, repo string) ([]model.RepoGrant, error) {
+	q := map[string][]string{"affiliation": {"direct"}}
+	dtos, err := ghclient.GetAll[collaboratorDTO](ctx, client, "/repos/"+org+"/"+repo+"/collaborators", q)
+	if err != nil {
+		return nil, err
+	}
+	grants := make([]model.RepoGrant, 0, len(dtos))
+	for _, d := range dtos {
+		grants = append(grants, model.RepoGrant{
+			Login:      d.Login,
+			Permission: d.permissionLevel(),
+			IsBot:      d.Type == "Bot",
+		})
+	}
+	return grants, nil
+}

@@ -1,0 +1,14 @@
+# Build output
+/scopeward
+/dist/
+
+# Editors / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local audit output (never commit — may contain org data)
+/fixes-*.sh
+/*-report.html
+/report.html

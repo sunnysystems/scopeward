@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scopeward · {{.OrgLogin}}</title>
+<style>
+  :root{
+    --amber:#FFB000; --copper:#B87333; --sand:#E8C9A0;
+    --bg:#16130d; --panel:#1f1a12; --panel2:#251f15; --ink:#f3ece0; --muted:#9a8f7d;
+    --green:#3FB950; --red:#F85149; --line:#322a1d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 24px 80px}
+  a{color:var(--amber);text-decoration:none}
+  a:hover{text-decoration:underline}
+  header.top{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:28px}
+  .brand{font-weight:800;font-size:22px;letter-spacing:-.4px;color:var(--amber)}
+  .brand .dot{color:var(--copper)}
+  .org{font-size:18px;color:var(--ink)}
+  .gen{margin-left:auto;color:var(--muted);font-size:13px}
+
+  .scorecard{display:flex;gap:28px;align-items:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin-bottom:14px}
+  .gauge{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;flex:0 0 auto;
+    background:radial-gradient(closest-side,var(--panel) 79%,transparent 80% 100%),
+      conic-gradient(var(--grade-color) calc(var(--score)*1%), #2f2819 0);}
+  .gauge .val{font-size:30px;font-weight:800;line-height:1}
+  .gauge .grade{font-size:13px;color:var(--muted);margin-top:2px}
+  .scoremeta h1{margin:0 0 6px;font-size:19px}
+  .scoremeta p{margin:0;color:var(--muted)}
+  .tally{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--line)}
+  .chip.sev-critical,.chip.sev-high{color:#ffd0cb;background:rgba(248,81,73,.14);border-color:rgba(248,81,73,.4)}
+  .chip.sev-medium{color:#ffe2ad;background:rgba(255,176,0,.14);border-color:rgba(255,176,0,.4)}
+  .chip.sev-low{color:var(--sand);background:rgba(184,115,51,.16);border-color:rgba(184,115,51,.45)}
+  .chip.sev-info{color:var(--muted)}
+  .chip.clean{color:#bfeccb;background:rgba(63,185,80,.14);border-color:rgba(63,185,80,.4)}
+
+  h2.axis{font-size:14px;text-transform:uppercase;letter-spacing:1.4px;color:var(--copper);
+    margin:34px 0 12px;font-weight:700}
+  .finding{background:var(--panel);border:1px solid var(--line);border-left-width:4px;border-radius:10px;
+    padding:16px 18px;margin-bottom:10px}
+  .finding.sev-critical,.finding.sev-high{border-left-color:var(--red)}
+  .finding.sev-medium{border-left-color:var(--amber)}
+  .finding.sev-low{border-left-color:var(--copper)}
+  .finding.sev-info{border-left-color:var(--muted)}
+  .finding .head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .finding .title{font-weight:650}
+  .finding .res{color:var(--muted);font-size:13px}
+  .finding .res code{color:var(--sand)}
+  .finding .desc{margin:8px 0 0;color:#ded5c6}
+  .finding .rem{margin:8px 0 0;color:var(--muted);font-size:13.5px}
+  .finding .rem b{color:var(--sand);font-weight:600}
+  .finding details{margin-top:8px}
+  .finding details summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+  .finding pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;overflow:auto;font-size:12.5px;color:var(--sand);margin:8px 0 0}
+  .finding pre.ghfix{color:var(--amber);border-color:rgba(255,176,0,.3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .cid{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted)}
+
+  .teamdesign{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:8px}
+  .teamdesign .td-head{font-size:15px;font-weight:600;color:var(--amber);margin:0 0 2px}
+  .teamdesign .td-exp{color:var(--muted);font-size:13px;margin:0 0 10px}
+  .teamdesign .td-list{margin:6px 0 10px;padding-left:20px}
+  .teamdesign .td-list li{margin:2px 0}
+  .teamdesign .td-clean{color:var(--green);margin:6px 0 10px}
+  .teamdesign table.td-own{border-collapse:collapse;font-size:14px;margin:4px 0 6px}
+  .teamdesign table.td-own td{padding:4px 14px 4px 0}
+  .teamdesign table.td-own td:last-child{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--sand)}
+  .teamdesign .td-gaps-h{margin:10px 0 2px}
+
+  table.cov{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+  table.cov td{padding:7px 10px;border-bottom:1px solid var(--line)}
+  table.cov .mark{width:24px;text-align:center;font-weight:700}
+  .ok{color:var(--green)} .partial{color:var(--amber)} .missing{color:var(--red)}
+  .reason{color:var(--muted);font-size:13px}
+  .neval{color:#ded5c6;margin:6px 0}
+  .neval .cid{margin-left:6px}
+  .empty{color:var(--muted);font-style:italic}
+  footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;
+    display:flex;gap:8px;align-items:center}
+  footer b{color:var(--copper)}
+</style>
+</head>
+<body><div class="wrap">
+
+<header class="top">
+  <span class="brand">scopeward<span class="dot">.</span></span>
+  <span class="org">{{.OrgDisplay}}</span>
+  <span class="gen">generated {{.GeneratedAt}}</span>
+</header>
+
+<section class="scorecard">
+  <div class="gauge" style="--score:{{.Score.Value}};--grade-color:{{.GradeColor}}">
+    <span class="val">{{.Score.Value}}</span>
+    <span class="grade">grade {{.Score.Grade}}</span>
+  </div>
+  <div class="scoremeta">
+    <h1>Governance score</h1>
+    <p>{{.FindingCount}} findings across {{.AxisCount}} axes · {{.CheckCount}} checks evaluated</p>
+    <div class="tally">
+      {{- if .Severities}}
+        {{- range .Severities}}<span class="chip sev-{{.Key}}">{{.Count}} {{.Key}}</span>{{end}}
+      {{- else}}<span class="chip clean">no findings</span>{{end}}
+    </div>
+  </div>
+</section>
+
+{{range .Axes}}
+<h2 class="axis">{{.Title}}</h2>
+{{range .Findings}}
+<article class="finding sev-{{.SeverityClass}}">
+  <div class="head">
+    <span class="chip sev-{{.SeverityClass}}">{{.Severity}}</span>
+    <span class="title">{{.Title}}</span>
+  </div>
+  {{if .ResourceName}}<div class="res">{{.ResourceType}}: {{if .ResourceURL}}<a href="{{.ResourceURL}}">{{.ResourceName}}</a>{{else}}<code>{{.ResourceName}}</code>{{end}}</div>{{end}}
+  <p class="desc">{{.Description}}</p>
+  {{if .Remediation}}<p class="rem"><b>Fix:</b> {{.Remediation}}</p>{{end}}
+  {{if .GHFix}}<pre class="ghfix" title="scopeward never runs this — review before running">{{.GHFix}}{{if .GHVerify}}
+
+# verify: {{.GHVerify}}{{end}}</pre>{{end}}
+  {{if .Evidence}}<details><summary>evidence</summary><pre>{{.Evidence}}</pre></details>{{end}}
+  <div class="rem"><span class="cid">{{.CheckID}}</span>{{if .DocsURL}} · <a href="{{.DocsURL}}">docs</a>{{end}}</div>
+</article>
+{{end}}
+{{end}}
+
+{{if not .Axes}}<p class="empty">No findings — every evaluated check passed.</p>{{end}}
+
+{{with .TeamDesign}}
+<h2 class="axis">Team Design</h2>
+<div class="teamdesign">
+  <p class="td-head">{{.Tier}} · {{.Teams}} teams, depth {{.Depth}}</p>
+  <p class="td-exp">Expected here: {{.Expected}}.</p>
+  {{if .Structure}}<ul class="td-list">{{range .Structure}}<li>{{.}}</li>{{end}}</ul>
+  {{else}}<p class="td-clean">Team structure looks clean.</p>{{end}}
+  <table class="td-own">
+    <tr><td>repos with an owning team</td><td>{{.OwningTeam}}</td></tr>
+    <tr><td>repos with a team code owner</td><td>{{.CodeOwner}}</td></tr>
+    <tr><td><code>owning-team</code> property</td><td>{{.Property}}</td></tr>
+  </table>
+  {{if .Gaps}}<p class="td-gaps-h"><b>Gaps</b></p><ul class="td-list">{{range .Gaps}}<li>{{.}}</li>{{end}}</ul>{{end}}
+</div>
+{{end}}
+
+{{if .NotEvaluated}}
+<h2 class="axis">Not evaluated</h2>
+{{range .NotEvaluated}}<p class="neval">~ {{.Title}} <span class="cid">{{.CheckID}} · needs {{.Missing}}</span></p>{{end}}
+{{end}}
+
+<h2 class="axis">Coverage</h2>
+<table class="cov">
+{{range .Coverage}}<tr>
+  <td class="mark {{.Class}}">{{.Mark}}</td>
+  <td>{{.Kind}}</td>
+  <td class="reason">{{.Reason}}</td>
+</tr>{{end}}
+</table>
+
+<footer>Generated locally by <b>scopeward</b> · read-only · no data left your machine</footer>
+
+</div></body></html>
