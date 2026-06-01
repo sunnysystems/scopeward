@@ -21,7 +21,7 @@ var orgScopedKinds = map[model.DataKind]bool{
 	model.DataCustomProperties: true,
 	model.DataAppInstallations: true, model.DataActionsTokenDefault: true,
 	model.DataOrgWebhooks: true, model.DataFineGrainedPATs: true, model.DataOrgRulesets: true,
-	model.DataCustomRoles: true, model.DataSelfHostedRunners: true, model.DataPendingInvitations: true,
+	model.DataCustomRoles: true, model.DataOrgRoles: true, model.DataSelfHostedRunners: true, model.DataPendingInvitations: true,
 	model.DataActionsPolicy: true, model.DataOrgSecrets: true, model.DataCredentialAuthorizations: true,
 	model.DataCopilotSeats: true, model.DataCompanyDomains: true,
 }

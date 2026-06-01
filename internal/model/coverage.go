@@ -35,6 +35,7 @@ const (
 	DataBranchProtection         DataKind = "repos.branch_protection"
 	DataOrgRulesets              DataKind = "org_rulesets"
 	DataCustomRoles              DataKind = "custom_roles"
+	DataOrgRoles                 DataKind = "org_roles"
 	DataSelfHostedRunners        DataKind = "self_hosted_runners"
 	DataPendingInvitations       DataKind = "pending_invitations"
 	DataActionsPolicy            DataKind = "actions_policy"
