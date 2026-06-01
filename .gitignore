@@ -13,3 +13,5 @@
 /fixes-*.sh
 /*-report.html
 /report.html
+/baseline.json
+/*.sarif
