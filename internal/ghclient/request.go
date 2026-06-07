@@ -160,6 +160,27 @@ func HasNextPage(resp *http.Response) bool {
 	return nextLinkRe.MatchString(resp.Header.Get("Link"))
 }
 
+var nextLinkURLRe = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
+
+// NextPageCursor extracts the value of a query parameter (e.g. "after") from the
+// response's Link header rel="next" target, or "" when there is no next page.
+// Some endpoints (secret-scanning and Dependabot alerts) paginate by an opaque
+// cursor instead of a page number, so GetAll's ?page=N stepping does not work.
+func NextPageCursor(resp *http.Response, param string) string {
+	if resp == nil {
+		return ""
+	}
+	m := nextLinkURLRe.FindStringSubmatch(resp.Header.Get("Link"))
+	if len(m) < 2 {
+		return ""
+	}
+	u, err := url.Parse(m[1])
+	if err != nil {
+		return ""
+	}
+	return u.Query().Get(param)
+}
+
 func decodeErrorMessage(body io.Reader) string {
 	var e struct {
 		Message string `json:"message"`
