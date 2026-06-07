@@ -44,6 +44,8 @@ const (
 	DataCredentialAuthorizations DataKind = "credential_authorizations"
 	DataCopilotSeats             DataKind = "copilot_seats"
 	DataOpenSecretAlerts         DataKind = "repos.open_secret_alerts"
+	DataDependabotEnabled        DataKind = "repos.dependabot_enabled"
+	DataOpenDependabotAlerts     DataKind = "repos.open_dependabot_alerts"
 	DataWorkflows                DataKind = "repos.workflows"
 
 	DataAccount DataKind = "account" // authenticated user's own account facts

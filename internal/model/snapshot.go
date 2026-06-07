@@ -139,6 +139,11 @@ type Repo struct {
 	SecretScanning         *bool            `json:"secret_scanning,omitempty"`    // nil = unknown
 	PushProtection         *bool            `json:"push_protection,omitempty"`    // nil = unknown
 	OpenSecretAlerts       *int             `json:"open_secret_alerts,omitempty"` // nil = unknown/unavailable
+	// Dependabot vulnerability alerts. Enabled is nil when not assessed (insufficient
+	// visibility); OpenDependabotAlerts is nil when alerts are off/unavailable, distinct
+	// from an all-zero summary.
+	DependabotAlertsEnabled *bool                   `json:"dependabot_alerts_enabled,omitempty"`
+	OpenDependabotAlerts    *DependabotAlertSummary `json:"open_dependabot_alerts,omitempty"`
 	// Classic branch-protection detail for the default branch. nil = not assessed
 	// (unprotected, or protected via a ruleset which the classic endpoint can't see).
 	BranchReqPRReview     *bool           `json:"branch_requires_pr_review,omitempty"`
@@ -152,6 +157,19 @@ type Repo struct {
 	CodeownersPresent *bool             `json:"codeowners_present,omitempty"`
 	CodeownersTeams   []string          `json:"codeowners_teams,omitempty"`
 }
+
+// DependabotAlertSummary counts a repo's open Dependabot (vulnerability) alerts
+// by advisory severity. A finding derives its severity from the highest band
+// that is non-zero.
+type DependabotAlertSummary struct {
+	Critical int `json:"critical,omitempty"`
+	High     int `json:"high,omitempty"`
+	Medium   int `json:"medium,omitempty"`
+	Low      int `json:"low,omitempty"`
+}
+
+// Total is the count of open alerts across all severities.
+func (d DependabotAlertSummary) Total() int { return d.Critical + d.High + d.Medium + d.Low }
 
 // WorkflowIssue is a supply-chain concern found in a repo's Actions workflow.
 type WorkflowIssue struct {

@@ -399,6 +399,65 @@ func fetchOpenSecretAlerts(ctx context.Context, client *ghclient.Client, org, re
 	return &n, nil
 }
 
+// fetchDependabotEnabled reports whether Dependabot vulnerability alerts are
+// enabled for a repo. The dedicated endpoint answers 204 (enabled) or 404
+// (disabled); any other error (e.g. 403) leaves the state unknown (nil).
+func fetchDependabotEnabled(ctx context.Context, client *ghclient.Client, org, repo string) (*bool, error) {
+	if _, err := client.Get(ctx, "/repos/"+org+"/"+repo+"/vulnerability-alerts", nil, nil); err != nil {
+		if ghclient.StatusCode(err) == 404 {
+			f := false
+			return &f, nil
+		}
+		return nil, err
+	}
+	t := true
+	return &t, nil
+}
+
+// fetchOpenDependabotAlerts summarizes a repo's open Dependabot alerts by
+// advisory severity. Returns nil when Dependabot alerts are unavailable (404 or
+// 403), distinct from an all-zero summary.
+//
+// The endpoint paginates by an opaque cursor (?after=), not ?page=N, so GetAll
+// cannot be used — we follow the Link header's rel="next" cursor by hand.
+func fetchOpenDependabotAlerts(ctx context.Context, client *ghclient.Client, org, repo string) (*model.DependabotAlertSummary, error) {
+	type alertDTO struct {
+		SecurityAdvisory struct {
+			Severity string `json:"severity"`
+		} `json:"security_advisory"`
+	}
+	var s model.DependabotAlertSummary
+	q := url.Values{"state": {"open"}, "per_page": {"100"}}
+	for {
+		var batch []alertDTO
+		resp, err := client.Get(ctx, "/repos/"+org+"/"+repo+"/dependabot/alerts", q, &batch)
+		if err != nil {
+			if c := ghclient.StatusCode(err); c == 404 || c == 403 {
+				return nil, nil // Dependabot alerts not available/enabled for this repo
+			}
+			return nil, err
+		}
+		for _, a := range batch {
+			switch a.SecurityAdvisory.Severity {
+			case "critical":
+				s.Critical++
+			case "high":
+				s.High++
+			case "medium":
+				s.Medium++
+			case "low":
+				s.Low++
+			}
+		}
+		after := ghclient.NextPageCursor(resp, "after")
+		if after == "" {
+			break
+		}
+		q.Set("after", after)
+	}
+	return &s, nil
+}
+
 // --- Per-repo code security (secret scanning / push protection) ---
 
 // fetchRepoSecurity reads a repo's security_and_analysis settings. Returns nil

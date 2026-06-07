@@ -52,6 +52,16 @@ func ghRepoEnablePushProtection(org, repo string) fix {
 	}
 }
 
+// ghRepoEnableDependabotAlerts enables Dependabot vulnerability alerts on a repo.
+// The dedicated endpoint takes a bodyless PUT; verifying reads the same endpoint,
+// which answers 204 when enabled and 404 when not, so we surface the status line.
+func ghRepoEnableDependabotAlerts(org, repo string) fix {
+	return fix{
+		cmd:    fmt.Sprintf("gh api -X PUT repos/%s/%s/vulnerability-alerts", org, repo),
+		verify: fmt.Sprintf("gh api -i repos/%s/%s/vulnerability-alerts | head -1", org, repo),
+	}
+}
+
 // ghProtectBranch applies classic branch protection to a repo's branch: require
 // a pull request, enforce on admins, and block force-pushes and deletion. The
 // protection PUT requires all four top-level keys (required_status_checks,

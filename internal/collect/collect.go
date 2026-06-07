@@ -44,7 +44,8 @@ type Options struct {
 var perRepoKinds = []model.DataKind{
 	model.DataRepoDirectCollaborators, model.DataDeployKeys, model.DataRepoWebhooks,
 	model.DataCommitAuthors, model.DataBranchProtection, model.DataRepoSecurity,
-	model.DataOpenSecretAlerts, model.DataWorkflows, model.DataCodeowners,
+	model.DataOpenSecretAlerts, model.DataDependabotEnabled, model.DataOpenDependabotAlerts,
+	model.DataWorkflows, model.DataCodeowners,
 }
 
 // Run collects everything scopeward currently knows how to gather for an org and

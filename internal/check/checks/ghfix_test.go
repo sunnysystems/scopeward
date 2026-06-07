@@ -67,6 +67,8 @@ func TestNewFixCommands(t *testing.T) {
 			[]string{"DELETE orgs/acme/invitations/555"}},
 		{"revoke-credential", ghRevokeCredential("acme", 999),
 			[]string{"DELETE orgs/acme/credential-authorizations/999"}},
+		{"enable-dependabot-alerts", ghRepoEnableDependabotAlerts("acme", "api"),
+			[]string{"PUT repos/acme/api/vulnerability-alerts"}},
 	}
 	for _, tc := range cases {
 		if tc.got.verify == "" {

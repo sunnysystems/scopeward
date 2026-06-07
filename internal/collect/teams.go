@@ -132,7 +132,7 @@ func collectTeamDetails(ctx context.Context, client *ghclient.Client, org string
 // distinct slice element, so the repo data needs no locking; only the per-kind
 // coverage bookkeeping is synchronized.
 func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string, snap *model.Snapshot, prog Reporter, opts Options) {
-	var grants, keys, hooks, commits, protection, security, alerts, workflows, codeowners covTally
+	var grants, keys, hooks, commits, protection, security, alerts, dependabot, depAlerts, workflows, codeowners covTally
 	now := Now()
 
 	// Build the target list: non-archived repos, deterministically ordered, and
@@ -224,6 +224,23 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 			}
 		}
 
+		// Dependabot vulnerability alerts: first whether they're enabled, then —
+		// only if so — the count of open alerts (off repos would 403/404).
+		if de, err := fetchDependabotEnabled(ctx, client, org, r.Name); err != nil {
+			dependabot.fail(reasonFor(err, "reading Dependabot alerts setting"))
+		} else {
+			r.DependabotAlertsEnabled = de
+			dependabot.add(1)
+			if de != nil && *de {
+				if sum, aerr := fetchOpenDependabotAlerts(ctx, client, org, r.Name); aerr != nil {
+					depAlerts.fail(reasonFor(aerr, "counting open Dependabot alerts"))
+				} else if sum != nil {
+					r.OpenDependabotAlerts = sum
+					depAlerts.add(1)
+				}
+			}
+		}
+
 		if wf, err := fetchWorkflowIssues(ctx, client, org, r.Name); err != nil {
 			workflows.fail(reasonFor(err, "scanning Actions workflows"))
 		} else {
@@ -246,6 +263,8 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 	protection.record(snap.Coverage, model.DataBranchProtection, attempted)
 	security.record(snap.Coverage, model.DataRepoSecurity, attempted)
 	alerts.record(snap.Coverage, model.DataOpenSecretAlerts, attempted)
+	dependabot.record(snap.Coverage, model.DataDependabotEnabled, attempted)
+	depAlerts.record(snap.Coverage, model.DataOpenDependabotAlerts, attempted)
 	workflows.record(snap.Coverage, model.DataWorkflows, attempted)
 	codeowners.record(snap.Coverage, model.DataCodeowners, attempted)
 
