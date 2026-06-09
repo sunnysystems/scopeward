@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>scopeward · {{.OrgLogin}}</title>
 <style>
-  /* Sunny Systems design system v1.0 — inline CSS, no JS, fully self-contained.
-     Fonts load locally when present and fall back to system stacks. The Sunny
-     logo is embedded as a base64 data URI, so the report makes no network calls. */
+  /* Sunny Systems design system v1.0 — inline CSS + one small inline script for
+     the findings filter, fully self-contained. No external assets and no network
+     calls: fonts fall back to system stacks and the Sunny logo is a base64 data
+     URI. The script only filters the DOM; with JS disabled, all findings show. */
   :root{
     --amber:#FFB61F; --yellow:#F0C840; --yellow-light:#F5D660; --dark:#332C15;
     --black:#1A1A1D; --gray-dark:#3A3A3A; --gray-mid:#8F8F8F; --gray-light:#DFDFDF; --white:#FFFFFF;
@@ -50,6 +51,68 @@
   .scoremeta p{margin:0;color:var(--gray-mid);font-size:12px}
   .tally{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
 
+  /* Dashboard summary — stat cards, severity distribution, breakdowns. Severity
+     fills are solid here (distinct from the outline chips above). */
+  .sev-fill-critical{background:#F85149}
+  .sev-fill-high{background:#F0883E}
+  .sev-fill-medium{background:#F0C840}
+  .sev-fill-low{background:#45C4B0}
+  .sev-fill-info{background:#8F8F8F}
+
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:26px}
+  .stat{background:var(--card);border:.5px solid var(--line);border-radius:var(--radius-lg);padding:18px 20px}
+  .stat .num{font-family:var(--font-display);font-size:34px;font-weight:700;line-height:1;color:var(--white)}
+  .stat .num.crit{color:#F85149}
+  .stat .num.high{color:#F0883E}
+  .stat .lbl{margin-top:8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--gray-mid)}
+
+  .dash-h{font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--white);margin:0 0 12px}
+  .sevdist{margin-bottom:30px}
+  .sevdist .legend{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:10px;font-size:12px;color:var(--gray-light)}
+  .sevdist .legend .lg{display:inline-flex;align-items:center;gap:6px}
+  .sevdist .legend .sw{width:11px;height:11px;border-radius:2px;flex:0 0 auto}
+  .distbar{display:flex;height:30px;border-radius:var(--radius-md);overflow:hidden;background:var(--gray-dark)}
+  .distbar .seg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;
+    color:rgba(0,0,0,.7);min-width:0;overflow:hidden}
+  .distbar .seg.sev-critical{color:#fff}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-bottom:8px}
+  .col h3{font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--white);margin:0 0 16px}
+  .brow{margin-bottom:14px}
+  .brow .top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+  .brow .name{font-family:var(--font-display);font-size:13.5px;font-weight:500;color:var(--white)}
+  .brow .n{font-size:13px;color:var(--gray-mid);font-family:var(--mono)}
+  .brow .track{height:8px;border-radius:99px;background:transparent}
+  .brow .bar{display:flex;height:8px;border-radius:99px;overflow:hidden;min-width:6px}
+  .brow .bar .seg{height:100%}
+  @media(max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr;gap:8px}}
+
+  /* Findings filter toolbar — sticky search + severity toggles (inline JS drives
+     it; degrades to showing everything if scripts are disabled). */
+  .toolbar{position:sticky;top:0;z-index:20;background:var(--black);margin:30px 0 6px;
+    padding:14px 0 12px;border-bottom:.5px solid var(--line);
+    display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+  .sw-search{flex:1 1 280px;min-width:180px;background:var(--card);color:var(--white);
+    border:.5px solid var(--line);border-radius:var(--radius-md);padding:9px 12px;font-size:13px;
+    font-family:var(--font-body)}
+  .sw-search::placeholder{color:var(--gray-mid)}
+  .sw-search:focus{outline:none;border-color:var(--amber)}
+  .sevtoggles{display:flex;flex-wrap:wrap;gap:6px}
+  .sevtog{cursor:pointer;font-size:10px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;
+    padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--gray-mid);
+    display:inline-flex;align-items:center;gap:6px;font-family:var(--font-body);transition:opacity .12s,border-color .12s,color .12s}
+  .sevtog::before{content:'';width:8px;height:8px;border-radius:2px;background:var(--gray-dark)}
+  .sevtog .c{font-family:var(--mono);opacity:.8}
+  .sevtog:not(.active){opacity:.45}
+  .sevtog.active{color:var(--white);border-color:var(--gray-mid)}
+  .sevtog[data-sev=critical].active::before{background:#F85149}
+  .sevtog[data-sev=high].active::before{background:#F0883E}
+  .sevtog[data-sev=medium].active::before{background:#F0C840}
+  .sevtog[data-sev=low].active::before{background:#45C4B0}
+  .sevtog[data-sev=info].active::before{background:#8F8F8F}
+  .sw-count{margin-left:auto;color:var(--gray-mid);font-size:12px;font-family:var(--mono);white-space:nowrap}
+  .noresults{color:var(--gray-mid);font-style:italic;margin:24px 0}
+
   /* Severity badges */
   .chip{display:inline-flex;align-items:center;font-size:10px;font-weight:500;letter-spacing:.3px;
     text-transform:uppercase;padding:3px 8px;border-radius:var(--radius-sm)}
@@ -65,25 +128,47 @@
     color:var(--amber);margin:38px 0 14px;font-weight:700;display:flex;align-items:center;gap:12px}
   h2.axis::after{content:'';flex:1;height:.5px;background:var(--line)}
 
-  /* Finding cards */
-  .finding{background:var(--card);border:.5px solid var(--line);border-left:3px solid var(--gray-dark);
-    border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:10px}
-  .finding.sev-critical,.finding.sev-high{border-left-color:var(--danger)}
-  .finding.sev-medium{border-left-color:var(--amber)}
-  .finding.sev-low{border-left-color:var(--yellow-light)}
-  .finding.sev-info{border-left-color:var(--gray-mid)}
-  .finding .head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .finding .title{font-family:var(--font-display);font-weight:500;font-size:15px;color:var(--white)}
-  .finding .res{color:var(--gray-mid);font-size:12px;margin-top:6px}
-  .finding .res code{font-family:var(--mono);color:var(--yellow-light)}
-  .finding .desc{margin:8px 0 0;color:var(--gray-light);font-size:13px}
-  .finding .rem{margin:8px 0 0;color:var(--gray-mid);font-size:12.5px}
-  .finding .rem b{color:var(--amber);font-weight:500}
-  .finding details{margin-top:8px}
-  .finding details summary{cursor:pointer;color:var(--gray-mid);font-size:11px}
-  .finding pre{background:var(--black);border:.5px solid var(--line);border-radius:var(--radius-md);
+  /* Problem groups — one card per check, listing every affected resource.
+     The whole card is a native <details>; collapsed, only the summary line
+     (severity · problem · count) shows, so a long report stays scannable. */
+  .group{background:var(--card);border:.5px solid var(--line);border-left:3px solid var(--gray-dark);
+    border-radius:var(--radius-lg);margin-bottom:10px;overflow:hidden}
+  .group.sev-critical,.group.sev-high{border-left-color:var(--danger)}
+  .group.sev-medium{border-left-color:var(--amber)}
+  .group.sev-low{border-left-color:var(--yellow-light)}
+  .group.sev-info{border-left-color:var(--gray-mid)}
+  .group > summary.ghead{display:flex;align-items:center;gap:10px;cursor:pointer;
+    list-style:none;user-select:none;padding:14px 18px}
+  .group > summary.ghead::-webkit-details-marker{display:none}
+  .group > summary.ghead .gtitle{flex:1 1 auto;min-width:0;font-family:var(--font-display);
+    font-weight:500;font-size:15px;color:var(--white)}
+  .group > summary.ghead .count{flex:0 0 auto;color:var(--gray-mid);font-size:12px;font-family:var(--mono)}
+  .group > summary.ghead::after{content:'';flex:0 0 auto;width:7px;height:7px;
+    border-right:1.6px solid var(--gray-mid);border-bottom:1.6px solid var(--gray-mid);
+    transform:rotate(45deg);transition:transform .15s ease}
+  .group[open] > summary.ghead::after{transform:rotate(-135deg)}
+  .group > summary.ghead:hover .gtitle{color:var(--amber)}
+  .group > summary.ghead:hover::after{border-color:var(--amber)}
+  .group > summary.ghead:focus-visible{outline:1px solid var(--amber);outline-offset:-3px;
+    border-radius:var(--radius-sm)}
+  .gbody{padding:0 18px 14px}
+  .gbody .desc{margin:0 0 8px;color:var(--gray-light);font-size:13px}
+  .gbody .rem{margin:0 0 10px;color:var(--gray-mid);font-size:12.5px}
+  .gbody .rem b{color:var(--amber);font-weight:500}
+
+  /* Affected-resource list */
+  ul.affected{list-style:none;margin:0;padding:0;border-top:.5px solid var(--line)}
+  ul.affected > li{padding:7px 2px;border-bottom:.5px solid var(--line)}
+  ul.affected > li:last-child{border-bottom:0}
+  ul.affected .rtitle{color:var(--gray-light);font-size:13px}
+  ul.affected .aside{color:var(--yellow-light);font-family:var(--mono);font-size:12px;margin-left:6px}
+  ul.affected .chip{margin-right:8px;vertical-align:1px}
+  ul.affected details.ev{margin-top:5px}
+  ul.affected details.ev > summary{cursor:pointer;color:var(--gray-mid);font-size:11px}
+  .gfoot{margin-top:10px;color:var(--gray-mid)}
+  pre{background:var(--black);border:.5px solid var(--line);border-radius:var(--radius-md);
     padding:10px 12px;overflow:auto;font-size:12px;color:var(--gray-light);margin:8px 0 0;font-family:var(--mono)}
-  .finding pre.ghfix{color:var(--amber);border-color:rgba(255,182,31,.35)}
+  pre.ghfix{color:var(--amber);border-color:rgba(255,182,31,.35)}
   .cid{font-family:var(--mono);font-size:11px;color:var(--gray-mid)}
 
   /* Team design */
@@ -100,7 +185,21 @@
   .teamdesign table.td-own td:last-child{font-family:var(--mono);color:var(--yellow-light)}
   .teamdesign .td-gaps-h{margin:10px 0 2px;color:var(--gray-light)}
 
-  /* Coverage */
+  /* Coverage — collapsible, with an axis-style heading as the summary */
+  summary.axissum{font-family:var(--font-display);font-size:13px;text-transform:uppercase;letter-spacing:1.5px;
+    color:var(--amber);margin:38px 0 14px;font-weight:700;display:flex;align-items:center;gap:12px;
+    cursor:pointer;list-style:none;user-select:none}
+  summary.axissum::-webkit-details-marker{display:none}
+  summary.axissum .line{flex:1 1 auto;height:.5px;background:var(--line)}
+  summary.axissum .axiscount{flex:0 0 auto;font-size:11px;text-transform:none;letter-spacing:0;
+    font-weight:400;color:var(--gray-mid);font-family:var(--mono)}
+  summary.axissum::after{content:'';flex:0 0 auto;width:7px;height:7px;
+    border-right:1.6px solid var(--gray-mid);border-bottom:1.6px solid var(--gray-mid);
+    transform:rotate(45deg);transition:transform .15s ease}
+  details.axissection[open] > summary.axissum::after{transform:rotate(-135deg)}
+  summary.axissum:hover{color:var(--yellow-light)}
+  summary.axissum:hover::after{border-color:var(--amber)}
+  summary.axissum:focus-visible{outline:1px solid var(--amber);outline-offset:3px;border-radius:var(--radius-sm)}
   table.cov{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
   table.cov td{padding:7px 10px;border-bottom:.5px solid var(--line)}
   table.cov .mark{width:24px;text-align:center;font-weight:700}
@@ -144,24 +243,85 @@
   </div>
 </section>
 
-{{range .Axes}}
-<h2 class="axis">{{.Title}}</h2>
-{{range .Findings}}
-<article class="finding sev-{{.SeverityClass}}">
-  <div class="head">
-    <span class="chip sev-{{.SeverityClass}}">{{.Severity}}</span>
-    <span class="title">{{.Title}}</span>
+{{with .Dashboard}}{{if .Total}}
+<section class="stats">
+  <div class="stat"><div class="num">{{.Total}}</div><div class="lbl">Total findings</div></div>
+  <div class="stat"><div class="num crit">{{.Critical}}</div><div class="lbl">Critical</div></div>
+  <div class="stat"><div class="num high">{{.High}}</div><div class="lbl">High</div></div>
+  <div class="stat"><div class="num">{{.AffectedRepos}}</div><div class="lbl">Affected repos</div></div>
+  <div class="stat"><div class="num">{{.Categories}}</div><div class="lbl">Action categories</div></div>
+</section>
+
+<div class="sevdist">
+  <p class="dash-h">Severity distribution</p>
+  <div class="legend">
+    {{range .SevLegend}}<span class="lg"><span class="sw sev-fill-{{.Key}}"></span>{{.Key}} · {{.Count}}</span>{{end}}
   </div>
-  {{if .ResourceName}}<div class="res">{{.ResourceType}}: {{if .ResourceURL}}<a href="{{.ResourceURL}}">{{.ResourceName}}</a>{{else}}<code>{{.ResourceName}}</code>{{end}}</div>{{end}}
-  <p class="desc">{{.Description}}</p>
-  {{if .Remediation}}<p class="rem"><b>Fix:</b> {{.Remediation}}</p>{{end}}
-  {{if .GHFix}}<pre class="ghfix" title="scopeward never runs this; review before running">{{.GHFix}}{{if .GHVerify}}
+  <div class="distbar">
+    {{range .SevBar}}<span class="seg sev-{{.Key}} sev-fill-{{.Key}}" style="width:{{.Width}}">{{if .ShowLabel}}{{.Count}}{{end}}</span>{{end}}
+  </div>
+</div>
+
+<div class="cols">
+  <div class="col">
+    <h3>Where they are · by governance area</h3>
+    {{range .ByArea}}<div class="brow">
+      <div class="top"><span class="name">{{.Label}}</span><span class="n">{{.Count}}</span></div>
+      <div class="bar" style="width:{{.BarWidth}}">{{range .Segs}}<span class="seg sev-fill-{{.Key}}" style="width:{{.Width}}"></span>{{end}}</div>
+    </div>{{end}}
+  </div>
+  <div class="col">
+    <h3>What kind of action · by category</h3>
+    {{range .ByCategory}}<div class="brow">
+      <div class="top"><span class="name">{{.Label}}</span><span class="n">{{.Count}}</span></div>
+      <div class="bar" style="width:{{.BarWidth}}">{{range .Segs}}<span class="seg sev-fill-{{.Key}}" style="width:{{.Width}}"></span>{{end}}</div>
+    </div>{{end}}
+  </div>
+</div>
+{{end}}{{end}}
+
+{{if .Axes}}
+<div class="toolbar">
+  <input id="sw-search" class="sw-search" type="search" list="sw-suggest" autocomplete="off"
+    placeholder="Search findings by repo, problem, area, or category…">
+  <datalist id="sw-suggest">{{range .Suggestions}}<option value="{{.}}"></option>{{end}}</datalist>
+  <div class="sevtoggles">
+    {{range .Dashboard.SevLegend}}<button type="button" class="sevtog active" data-sev="{{.Key}}">{{.Key}} <span class="c">{{.Count}}</span></button>{{end}}
+  </div>
+  <span class="sw-count" id="sw-count"></span>
+</div>
+<p class="noresults" id="sw-noresults" hidden>No findings match your filters.</p>
+{{end}}
+
+{{range .Axes}}
+<section class="faxis">
+<h2 class="axis">{{.Title}}</h2>
+{{range .Groups}}
+<details class="group sev-{{.SeverityClass}}" data-text="{{.Search}}" data-open="{{if .Open}}1{{else}}0{{end}}"{{if .Open}} open{{end}}>
+  <summary class="ghead">
+    <span class="chip sev-{{.SeverityClass}}">{{.Severity}}</span>
+    <span class="gtitle">{{.Label}}</span>
+    <span class="count">{{.CountLabel}}</span>
+  </summary>
+  <div class="gbody">
+    <p class="desc">{{.Description}}</p>
+    {{if .Remediation}}<p class="rem"><b>Fix:</b> {{.Remediation}}</p>{{end}}
+    <ul class="affected">
+      {{range .Items}}<li data-sev="{{.SeverityClass}}" data-text="{{.Search}}">
+        {{if .ShowChip}}<span class="chip sev-{{.SeverityClass}}">{{.Severity}}</span>{{end}}<span class="rtitle">{{if .ResourceURL}}<a href="{{.ResourceURL}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</span>{{if .AsideName}}<span class="aside">{{.AsideName}}</span>{{end}}
+        {{if or .Evidence .GHFix}}<details class="ev"><summary>details</summary>
+          {{if .GHFix}}<pre class="ghfix" title="scopeward never runs this; review before running">{{.GHFix}}{{if .GHVerify}}
 
 # verify: {{.GHVerify}}{{end}}</pre>{{end}}
-  {{if .Evidence}}<details><summary>evidence</summary><pre>{{.Evidence}}</pre></details>{{end}}
-  <div class="rem"><span class="cid">{{.CheckID}}</span>{{if .DocsURL}} · <a href="{{.DocsURL}}">docs</a>{{end}}</div>
-</article>
+          {{if .Evidence}}<pre>{{.Evidence}}</pre>{{end}}
+        </details>{{end}}
+      </li>{{end}}
+    </ul>
+    <div class="gfoot rem"><span class="cid">{{.CheckID}}</span>{{if .DocsURL}} · <a href="{{.DocsURL}}">docs</a>{{end}}</div>
+  </div>
+</details>
 {{end}}
+</section>
 {{end}}
 
 {{if not .Axes}}<p class="empty">No findings. Every evaluated check passed.</p>{{end}}
@@ -187,15 +347,84 @@
 {{range .NotEvaluated}}<p class="neval">~ {{.Title}} <span class="cid">{{.CheckID}} · needs {{.Missing}}</span></p>{{end}}
 {{end}}
 
-<h2 class="axis">Coverage</h2>
-<table class="cov">
-{{range .Coverage}}<tr>
-  <td class="mark {{.Class}}">{{.Mark}}</td>
-  <td>{{.Kind}}</td>
-  <td class="reason">{{.Reason}}</td>
-</tr>{{end}}
-</table>
+<details class="axissection">
+  <summary class="axissum">Coverage<span class="line"></span>{{if .CoverageSummary}}<span class="axiscount">{{.CoverageSummary}}</span>{{end}}</summary>
+  <table class="cov">
+  {{range .Coverage}}<tr>
+    <td class="mark {{.Class}}">{{.Mark}}</td>
+    <td>{{.Kind}}</td>
+    <td class="reason">{{.Reason}}</td>
+  </tr>{{end}}
+  </table>
+</details>
 
 <footer>Generated locally by <a href="https://sunnysystems.com.br/products/scopeward"><b>scopeward</b></a><span class="by">Built by Sunny Systems</span></footer>
 
-</div></body></html>
+</div>
+<script>
+/* Findings filter: free-text search (matches problem, repo, area, category) plus
+   severity toggles. Pure DOM, no dependencies, no network — the report stays a
+   single self-contained file. With scripts disabled, everything simply shows. */
+(function () {
+  var search = document.getElementById('sw-search');
+  if (!search) return; // no findings, no toolbar
+  var countEl = document.getElementById('sw-count');
+  var noResults = document.getElementById('sw-noresults');
+  var toggles = [].slice.call(document.querySelectorAll('.sevtog'));
+  var groups = [].slice.call(document.querySelectorAll('.faxis .group'));
+  var sections = [].slice.call(document.querySelectorAll('.faxis'));
+  var total = document.querySelectorAll('.faxis .affected > li').length;
+
+  function activeSevs() {
+    var s = {};
+    toggles.forEach(function (t) {
+      if (t.classList.contains('active')) s[t.getAttribute('data-sev')] = true;
+    });
+    return s;
+  }
+
+  function apply() {
+    var query = (search.value || '').trim().toLowerCase();
+    var tokens = query ? query.split(/\s+/) : [];
+    var sevs = activeSevs();
+    var searching = tokens.length > 0;
+    var shownTotal = 0;
+
+    groups.forEach(function (g) {
+      var gtext = g.getAttribute('data-text') || '';
+      var items = [].slice.call(g.querySelectorAll('.affected > li'));
+      var shown = 0;
+      items.forEach(function (li) {
+        var hay = gtext + ' ' + (li.getAttribute('data-text') || '');
+        var matches = !searching || tokens.every(function (t) { return hay.indexOf(t) !== -1; });
+        var visible = matches && !!sevs[li.getAttribute('data-sev')];
+        li.style.display = visible ? '' : 'none';
+        if (visible) shown++;
+      });
+      var groupVisible = shown > 0;
+      g.style.display = groupVisible ? '' : 'none';
+      if (groupVisible) {
+        shownTotal += shown;
+        g.open = searching ? true : g.getAttribute('data-open') === '1';
+      }
+    });
+
+    sections.forEach(function (sec) {
+      var any = [].slice.call(sec.querySelectorAll('.group')).some(function (g) {
+        return g.style.display !== 'none';
+      });
+      sec.style.display = any ? '' : 'none';
+    });
+
+    if (countEl) countEl.textContent = shownTotal === total ? total + ' findings' : shownTotal + ' of ' + total + ' findings';
+    if (noResults) noResults.hidden = shownTotal !== 0;
+  }
+
+  search.addEventListener('input', apply);
+  toggles.forEach(function (t) {
+    t.addEventListener('click', function () { t.classList.toggle('active'); apply(); });
+  });
+  apply();
+})();
+</script>
+</body></html>

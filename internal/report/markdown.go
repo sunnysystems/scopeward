@@ -33,13 +33,21 @@ func Markdown(w io.Writer, a Audit) {
 		fmt.Fprintf(w, "_vs baseline: %d new · %d resolved_\n\n", len(a.NewKeys), a.ResolvedCount)
 	}
 
-	for _, g := range groupByAxis(a.Report.Findings) {
-		fmt.Fprintf(w, "## %s\n\n", g.Title)
-		for _, f := range g.Findings {
-			fmt.Fprintf(w, "- **[%s]** %s  \n", upper(f.Severity), f.Title)
+	byAxis := map[model.Axis][]model.Finding{}
+	for _, f := range a.Report.Findings {
+		byAxis[f.Axis] = append(byAxis[f.Axis], f)
+	}
+	for _, axis := range axisOrder {
+		fs := byAxis[axis]
+		if len(fs) == 0 {
+			continue
+		}
+		fmt.Fprintf(w, "## %s\n\n", axis.Title())
+		for _, f := range fs {
+			fmt.Fprintf(w, "- **[%s]** %s  \n", upper(f.Severity.String()), f.Title)
 			meta := "`" + f.CheckID + "`"
-			if f.ResourceName != "" {
-				meta = f.ResourceName + " · " + meta
+			if f.Resource.Name != "" {
+				meta = f.Resource.Name + " · " + meta
 			}
 			fmt.Fprintf(w, "  %s  \n", meta)
 			if f.Description != "" {

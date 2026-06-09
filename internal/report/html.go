@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/sunnysystems/scopeward/internal/check"
 	"github.com/sunnysystems/scopeward/internal/model"
@@ -19,19 +20,22 @@ var htmlTemplateSrc string
 var htmlTemplate = template.Must(template.New("report").Parse(htmlTemplateSrc))
 
 type htmlView struct {
-	OrgLogin     string
-	OrgDisplay   string
-	GeneratedAt  string
-	Score        score.Score
-	GradeColor   string
-	FindingCount int
-	AxisCount    int
-	CheckCount   int
-	Severities   []sevCount
-	Axes         []axisGroup
-	TeamDesign   *teamDesignView
-	NotEvaluated []nevalView
-	Coverage     []covView
+	OrgLogin        string
+	OrgDisplay      string
+	GeneratedAt     string
+	Score           score.Score
+	GradeColor      string
+	Dashboard       dashboardView
+	FindingCount    int
+	AxisCount       int
+	CheckCount      int
+	Severities      []sevCount
+	Axes            []axisGroup
+	TeamDesign      *teamDesignView
+	NotEvaluated    []nevalView
+	Coverage        []covView
+	CoverageSummary string   // compact tally for the collapsed coverage header
+	Suggestions     []string // autocomplete entries for the findings search box
 }
 
 type teamDesignView struct {
@@ -52,24 +56,42 @@ type sevCount struct {
 }
 
 type axisGroup struct {
-	Title    string
-	Findings []findingView
+	Title  string
+	Groups []problemGroup
 }
 
-type findingView struct {
+// problemGroup collapses every finding from one check into a single card: the
+// shared description/remediation/docs are shown once, and the affected resources
+// are listed beneath. This keeps a report readable when one check fires across
+// hundreds of repositories.
+type problemGroup struct {
+	Severity      string // label of the most urgent finding in the group
+	SeverityClass string
+	sevRank       int  // numeric severity for ordering (not rendered)
+	Mixed         bool // findings span more than one severity → show per-row chips
+	Label         string
+	Count         int
+	CountLabel    string // e.g. "376 repos", "1 user"
+	Open          bool   // expanded by default for small groups
+	Description   string // shared across the group
+	Remediation   string // shared across the group
+	DocsURL       string // shared across the group
+	CheckID       string
+	Search        string // lowercased label/check/axis/category, for client-side filtering
+	Items         []problemItem
+}
+
+type problemItem struct {
 	Severity      string
 	SeverityClass string
+	ShowChip      bool // group spans multiple severities → label this row's own
 	Title         string
-	ResourceType  string
-	ResourceName  string
 	ResourceURL   string
-	Description   string
-	Remediation   string
+	AsideName     string // resource name, shown only when not already in the title
+	Search        string // lowercased title/resource, for client-side filtering
+	Evidence      string
 	GHFix         string
 	GHVerify      string
-	Evidence      string
-	CheckID       string
-	DocsURL       string
 }
 
 type nevalView struct {
@@ -104,6 +126,7 @@ func buildHTMLView(a Audit) htmlView {
 		GeneratedAt:  a.Snapshot.CollectedAt.Format("2006-01-02 15:04 MST"),
 		Score:        a.Score,
 		GradeColor:   gradeColor(a.Score.Grade),
+		Dashboard:    buildDashboard(a),
 		FindingCount: len(a.Report.Findings),
 		CheckCount:   len(a.Report.Findings) + len(a.Report.Skipped),
 		Severities:   severityTally(a.Score),
@@ -113,7 +136,60 @@ func buildHTMLView(a Audit) htmlView {
 		Coverage:     covViews(a.Snapshot.Coverage),
 	}
 	v.AxisCount = len(v.Axes)
+	v.CoverageSummary = coverageSummary(v.Coverage)
+	v.Suggestions = filterSuggestions(a.Report.Findings)
 	return v
+}
+
+// filterSuggestions collects the distinct terms worth offering as search
+// autocomplete: affected resource names, problem labels, governance areas, and
+// action categories. Returned sorted for a stable, scannable datalist.
+func filterSuggestions(findings []model.Finding) []string {
+	set := map[string]bool{}
+	for _, f := range findings {
+		if f.Resource.Name != "" {
+			set[f.Resource.Name] = true
+		}
+		set[f.Axis.Title()] = true
+		set[categoryOf(f.CheckID)] = true
+		if meta, ok := check.Meta(f.CheckID); ok && meta.Title != "" {
+			set[meta.Title] = true
+		} else {
+			set[f.Title] = true
+		}
+	}
+	out := make([]string, 0, len(set))
+	for s := range set {
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// coverageSummary tallies coverage by status into a compact line (e.g.
+// "8 ok · 1 partial · 3 missing") shown when the section is collapsed.
+func coverageSummary(views []covView) string {
+	var ok, partial, missing int
+	for _, c := range views {
+		switch c.Class {
+		case "partial":
+			partial++
+		case "missing":
+			missing++
+		default:
+			ok++
+		}
+	}
+	var parts []string
+	for _, p := range []struct {
+		n     int
+		label string
+	}{{ok, "ok"}, {partial, "partial"}, {missing, "missing"}} {
+		if p.n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", p.n, p.label))
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 // teamDesignHTML adapts the portrait to a template-friendly view, or nil.
@@ -177,43 +253,122 @@ func severityTally(s score.Score) []sevCount {
 	return out
 }
 
+// groupByAxis buckets findings by axis, then collapses each axis's findings into
+// one problemGroup per check. Groups are ordered most-urgent first, then by how
+// widespread they are, so the worst, most pervasive problems lead each section.
 func groupByAxis(findings []model.Finding) []axisGroup {
-	byAxis := map[model.Axis][]model.Finding{}
+	byAxisCheck := map[model.Axis]map[string][]model.Finding{}
+	checkOrder := map[model.Axis][]string{}
 	for _, f := range findings {
-		byAxis[f.Axis] = append(byAxis[f.Axis], f)
+		if byAxisCheck[f.Axis] == nil {
+			byAxisCheck[f.Axis] = map[string][]model.Finding{}
+		}
+		if _, seen := byAxisCheck[f.Axis][f.CheckID]; !seen {
+			checkOrder[f.Axis] = append(checkOrder[f.Axis], f.CheckID)
+		}
+		byAxisCheck[f.Axis][f.CheckID] = append(byAxisCheck[f.Axis][f.CheckID], f)
 	}
-	var groups []axisGroup
+
+	var out []axisGroup
 	for _, axis := range axisOrder {
-		fs := byAxis[axis]
-		if len(fs) == 0 {
+		checks := byAxisCheck[axis]
+		if len(checks) == 0 {
 			continue
 		}
-		// findings arrive globally severity-sorted; keep that order within the axis.
-		views := make([]findingView, 0, len(fs))
-		for _, f := range fs {
-			views = append(views, toFindingView(f))
+		groups := make([]problemGroup, 0, len(checks))
+		for _, cid := range checkOrder[axis] {
+			groups = append(groups, toProblemGroup(checks[cid]))
 		}
-		groups = append(groups, axisGroup{Title: axis.Title(), Findings: views})
+		sort.SliceStable(groups, func(i, j int) bool {
+			if groups[i].sevRank != groups[j].sevRank {
+				return groups[i].sevRank > groups[j].sevRank
+			}
+			if groups[i].Count != groups[j].Count {
+				return groups[i].Count > groups[j].Count
+			}
+			return groups[i].Label < groups[j].Label
+		})
+		out = append(out, axisGroup{Title: axis.Title(), Groups: groups})
 	}
-	return groups
+	return out
 }
 
-func toFindingView(f model.Finding) findingView {
-	return findingView{
-		Severity:      f.Severity.String(),
-		SeverityClass: f.Severity.String(),
-		Title:         f.Title,
-		ResourceType:  f.Resource.Type,
-		ResourceName:  f.Resource.Name,
-		ResourceURL:   f.Resource.URL,
-		Description:   f.Description,
-		Remediation:   f.Remediation,
-		GHFix:         f.GHFix,
-		GHVerify:      f.GHVerify,
-		Evidence:      evidenceJSON(f.Evidence),
-		CheckID:       f.CheckID,
-		DocsURL:       f.DocsURL,
+// toProblemGroup builds one card from all findings of a single check. They share
+// a description, remediation, and docs link (rendered once); per-resource detail
+// lives in the item rows.
+func toProblemGroup(fs []model.Finding) problemGroup {
+	first := fs[0]
+	maxSev := first.Severity
+	mixed := false
+	for _, f := range fs[1:] {
+		if f.Severity != first.Severity {
+			mixed = true
+		}
+		if f.Severity > maxSev {
+			maxSev = f.Severity
+		}
 	}
+
+	label := first.Title
+	if meta, ok := check.Meta(first.CheckID); ok && meta.Title != "" {
+		label = meta.Title
+	}
+
+	items := make([]problemItem, 0, len(fs))
+	for _, f := range fs {
+		aside := ""
+		if f.Resource.Name != "" && !strings.Contains(f.Title, f.Resource.Name) {
+			aside = f.Resource.Name
+		}
+		items = append(items, problemItem{
+			Severity:      f.Severity.String(),
+			SeverityClass: f.Severity.String(),
+			ShowChip:      mixed,
+			Title:         f.Title,
+			ResourceURL:   f.Resource.URL,
+			AsideName:     aside,
+			Search:        strings.ToLower(f.Title + " " + aside),
+			Evidence:      evidenceJSON(f.Evidence),
+			GHFix:         f.GHFix,
+			GHVerify:      f.GHVerify,
+		})
+	}
+
+	return problemGroup{
+		Severity:      maxSev.String(),
+		SeverityClass: maxSev.String(),
+		sevRank:       int(maxSev),
+		Mixed:         mixed,
+		Label:         label,
+		Count:         len(fs),
+		CountLabel:    countLabel(fs),
+		Open:          len(fs) <= 3,
+		Description:   first.Description,
+		Remediation:   first.Remediation,
+		DocsURL:       first.DocsURL,
+		CheckID:       first.CheckID,
+		Search:        strings.ToLower(label + " " + first.CheckID + " " + first.Axis.Title() + " " + categoryOf(first.CheckID)),
+		Items:         items,
+	}
+}
+
+// countLabel renders the affected-resource count with a unit drawn from the
+// resource type when every finding shares one (e.g. "376 repos"), else "findings".
+func countLabel(fs []model.Finding) string {
+	unit := fs[0].Resource.Type
+	for _, f := range fs[1:] {
+		if f.Resource.Type != unit {
+			unit = ""
+			break
+		}
+	}
+	if unit == "" {
+		unit = "finding"
+	}
+	if len(fs) == 1 {
+		return "1 " + unit
+	}
+	return fmt.Sprintf("%d %ss", len(fs), unit)
 }
 
 func evidenceJSON(ev map[string]any) string {

@@ -60,10 +60,11 @@ func TestHTMLContainsKeySections(t *testing.T) {
 		}
 	}
 
-	// Fully self-contained: no JS, no external stylesheet, and no remotely
-	// fetched assets — the Sunny logo is embedded as a data URI. (href links
-	// are fine; they are user-clicked, not auto-loaded on open.)
-	if strings.Contains(out, "<script") || strings.Contains(out, "<link") {
+	// Fully self-contained: an inline filter script is allowed, but nothing may be
+	// fetched over the network — no external scripts, stylesheets, or assets. The
+	// Sunny logo is embedded as a data URI. (href links are fine; they are
+	// user-clicked, not auto-loaded on open.)
+	if strings.Contains(out, "<script src") || strings.Contains(out, "<link") {
 		t.Error("HTML report must not pull external scripts or stylesheets")
 	}
 	if strings.Contains(out, `src="http`) {
