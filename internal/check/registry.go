@@ -23,6 +23,17 @@ func Register(c Check) {
 	registry[id] = c
 }
 
+// Meta returns the static metadata for a registered check by ID. The second
+// result is false when no check with that ID is registered (e.g. in a test that
+// does not import the checks package).
+func Meta(id string) (CheckMeta, bool) {
+	c, ok := registry[id]
+	if !ok {
+		return CheckMeta{}, false
+	}
+	return c.Meta(), true
+}
+
 // All returns every registered check, sorted by ID for deterministic runs.
 func All() []Check {
 	out := make([]Check, 0, len(registry))
