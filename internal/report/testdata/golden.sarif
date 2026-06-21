@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "scopeward",
+          "informationUri": "https://github.com/sunnysystems/scopeward",
+          "rules": [
+            {
+              "id": "ai.agent-broad-write",
+              "name": "ai.agent-broad-write",
+              "shortDescription": {
+                "text": "Agent commits with broad write"
+              },
+              "properties": {
+                "axis": "ai_agents"
+              }
+            },
+            {
+              "id": "ai.agent-inventory",
+              "name": "ai.agent-inventory",
+              "shortDescription": {
+                "text": "3 machine identities committed code"
+              },
+              "properties": {
+                "axis": "ai_agents"
+              }
+            },
+            {
+              "id": "human.no-2fa",
+              "name": "human.no-2fa",
+              "shortDescription": {
+                "text": "Member has 2FA disabled"
+              },
+              "helpUri": "https://docs.github.com/x",
+              "properties": {
+                "axis": "identity"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "human.no-2fa",
+          "level": "error",
+          "message": {
+            "text": "Member has 2FA disabled"
+          },
+          "properties": {
+            "resource": "bob",
+            "severity": "high"
+          }
+        },
+        {
+          "ruleId": "ai.agent-broad-write",
+          "level": "error",
+          "message": {
+            "text": "Agent commits with broad write"
+          },
+          "properties": {
+            "resource": "ai-refactor[bot]",
+            "severity": "high"
+          }
+        },
+        {
+          "ruleId": "ai.agent-inventory",
+          "level": "note",
+          "message": {
+            "text": "3 machine identities committed code"
+          },
+          "properties": {
+            "resource": "acme",
+            "severity": "info"
+          }
+        }
+      ]
+    }
+  ]
+}
