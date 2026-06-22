@@ -1,6 +1,9 @@
 package model
 
-import "sync"
+import (
+	"sort"
+	"sync"
+)
 
 // DataKind names a slice of the inventory a collector is responsible for. Checks
 // declare which kinds they need; the runner skips a check when its kind was not
@@ -119,7 +122,8 @@ func (r *CoverageReport) Available(kind DataKind) bool {
 	return ok && c.Status != CoverageMissing
 }
 
-// All returns a copy of every recorded coverage entry.
+// All returns a copy of every recorded coverage entry, sorted by Kind so output
+// (notably the JSON report) is deterministic across runs.
 func (r *CoverageReport) All() []Coverage {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -127,5 +131,6 @@ func (r *CoverageReport) All() []Coverage {
 	for _, c := range r.items {
 		out = append(out, c)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Kind < out[j].Kind })
 	return out
 }

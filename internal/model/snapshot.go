@@ -275,34 +275,58 @@ type ActionsTokenSettings struct {
 	CanApprovePullRequestReviews bool   `json:"can_approve_pull_request_reviews"`
 }
 
-// Snapshot is the immutable inventory collected from GitHub. Checks read it;
+// Snapshot is the immutable inventory collected from a forge. Checks read it;
 // they never mutate it. Fields fill in as more axes are implemented.
+//
+// The model is provider-neutral: the same pure checks evaluate a GitHub- or
+// GitLab-collected snapshot. A handful of fields below have no equivalent on
+// every provider (see the GitHub-only group); a collector simply leaves them
+// empty and records no coverage for them, so the checks that need them are
+// skipped as "not evaluated" rather than silently passing.
 type Snapshot struct {
+	// Provider records which forge this was collected from; Host is the base
+	// host for self-managed instances (empty = the provider's SaaS default).
+	Provider Provider `json:"provider,omitempty"`
+	Host     string   `json:"host,omitempty"`
+
 	Org            Organization   `json:"org"`
 	Members        []Member       `json:"members,omitempty"`
 	OutsideCollabs []Collaborator `json:"outside_collaborators,omitempty"`
 	Teams          []Team         `json:"teams,omitempty"`
 	Repos          []Repo         `json:"repos,omitempty"`
 
+	OrgWebhooks        []Webhook    `json:"org_webhooks,omitempty"`
+	OrgRulesets        []Ruleset    `json:"org_rulesets,omitempty"`
+	SelfHostedRunners  []Runner     `json:"self_hosted_runners,omitempty"`
+	PendingInvitations []Invitation `json:"pending_invitations,omitempty"`
+	OrgSecrets         []OrgSecret  `json:"org_secrets,omitempty"`
+
+	// GitHub-only: concepts with no GitLab equivalent. A non-GitHub collector
+	// leaves these empty and records no coverage for them, so the checks that
+	// read them are skipped (not evaluated) rather than reported as clean.
+	//   - AppInstallations: GitHub Apps (GitLab has no equivalent).
+	//   - PATs: fine-grained PAT policy (GitHub-specific shape/visibility).
+	//   - ActionsToken / ActionsPolicy: GitHub Actions GITHUB_TOKEN + usage policy.
+	//   - CustomRoles / OrgRoles: GitHub custom repo roles & organization roles.
+	//   - CredentialAuthorizations: SAML SSO-authorized credentials (GitHub SAML).
+	//   - CopilotSeats: GitHub Copilot billing.
 	AppInstallations         []AppInstallation         `json:"app_installations,omitempty"`
-	OrgWebhooks              []Webhook                 `json:"org_webhooks,omitempty"`
 	PATs                     []PAT                     `json:"fine_grained_pats,omitempty"`
 	ActionsToken             ActionsTokenSettings      `json:"actions_token"`
-	OrgRulesets              []Ruleset                 `json:"org_rulesets,omitempty"`
+	ActionsPolicy            ActionsPolicy             `json:"actions_policy"`
 	CustomRoles              []CustomRole              `json:"custom_roles,omitempty"`
 	OrgRoles                 []OrgRole                 `json:"org_roles,omitempty"`
-	SelfHostedRunners        []Runner                  `json:"self_hosted_runners,omitempty"`
-	PendingInvitations       []Invitation              `json:"pending_invitations,omitempty"`
-	ActionsPolicy            ActionsPolicy             `json:"actions_policy"`
-	OrgSecrets               []OrgSecret               `json:"org_secrets,omitempty"`
 	CredentialAuthorizations []CredentialAuthorization `json:"credential_authorizations,omitempty"`
 	CopilotSeats             []CopilotSeat             `json:"copilot_seats,omitempty"`
 
 	// AccountTwoFactor is the authenticated user's own 2FA state (user/--me mode).
 	AccountTwoFactor *bool `json:"account_two_factor,omitempty"`
 
-	// CompanyDomains is audit configuration (not collected): the email domains
-	// considered to belong to the organization, used by the email-domain check.
+	// The fields below are provider-neutral audit configuration (not collected
+	// from any forge); they apply identically to every provider.
+	//
+	// CompanyDomains is the set of email domains considered to belong to the
+	// organization, used by the email-domain check.
 	CompanyDomains []string `json:"company_domains,omitempty"`
 	// StaleAfter is the age past which a repo with no pushes is considered stale.
 	// Audit configuration; zero means "use the check default".
@@ -319,9 +343,11 @@ type Snapshot struct {
 }
 
 // NewSnapshot returns an empty snapshot for an org with an initialized coverage
-// report.
+// report. The provider defaults to GitHub; collectors for other forges set
+// Provider (and Host) explicitly.
 func NewSnapshot(org string) *Snapshot {
 	return &Snapshot{
+		Provider: ProviderGitHub,
 		Org:      Organization{Login: org},
 		Coverage: NewCoverageReport(),
 	}

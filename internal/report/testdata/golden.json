@@ -1,0 +1,85 @@
+{
+  "org": {
+    "login": "acme",
+    "name": "Acme Corp",
+    "id": 0,
+    "two_factor_required": false
+  },
+  "collected_at": "2025-05-30T10:13:20Z",
+  "score": {
+    "value": 81,
+    "grade": "B",
+    "penalty": 24,
+    "by_severity": {
+      "high": 2,
+      "info": 1
+    },
+    "by_axis": {
+      "ai_agents": 12,
+      "identity": 12
+    }
+  },
+  "findings": [
+    {
+      "check_id": "human.no-2fa",
+      "title": "Member has 2FA disabled",
+      "severity": "high",
+      "axis": "identity",
+      "resource": {
+        "type": "member",
+        "name": "bob",
+        "url": "https://github.com/bob"
+      },
+      "evidence": {
+        "login": "bob"
+      },
+      "description": "Soft target.",
+      "remediation": "Enable 2FA.",
+      "docs_url": "https://docs.github.com/x"
+    },
+    {
+      "check_id": "ai.agent-broad-write",
+      "title": "Agent commits with broad write",
+      "severity": "high",
+      "axis": "ai_agents",
+      "resource": {
+        "type": "agent",
+        "name": "ai-refactor[bot]"
+      },
+      "description": "Big blast radius."
+    },
+    {
+      "check_id": "ai.agent-inventory",
+      "title": "3 machine identities committed code",
+      "severity": "info",
+      "axis": "ai_agents",
+      "resource": {
+        "type": "org",
+        "name": "acme"
+      },
+      "description": "Inventory."
+    }
+  ],
+  "not_evaluated": [
+    {
+      "check_id": "nonhuman.pat-no-expiry",
+      "title": "Non-expiring PATs",
+      "axis": "nonhuman",
+      "missing_data": [
+        "fine_grained_pats"
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "kind": "fine_grained_pats",
+      "status": "missing",
+      "reason": "org has not enabled the fine-grained PAT policy"
+    },
+    {
+      "kind": "members",
+      "status": "ok",
+      "count": 42
+    }
+  ]
+}
