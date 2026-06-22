@@ -247,9 +247,55 @@ type AppInstallation struct {
 
 // DeployKey is an SSH key granting access to a single repository.
 type DeployKey struct {
-	ID       int64  `json:"id"`
-	Title    string `json:"title"`
-	ReadOnly bool   `json:"read_only"`
+	ID        int64      `json:"id"`
+	Title     string     `json:"title"`
+	ReadOnly  bool       `json:"read_only"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"` // nil = never expires / not exposed
+}
+
+// AccessToken is a scoped, expiring API credential not tied to an interactive
+// login. GitLab populates it from personal, project, and group access tokens;
+// the neutral shape (scopes, expiry, last use, active/revoked) lets the same
+// no-expiry / broad-scope / staleness checks evaluate any provider that fills it.
+type AccessToken struct {
+	ID         int64      `json:"id"`
+	ScopeID    int64      `json:"scope_id,omitempty"` // project/group numeric id (0 for personal); the revoke path needs it
+	Name       string     `json:"name,omitempty"`
+	Kind       string     `json:"kind"`             // "personal" | "project" | "group"
+	Holder     string     `json:"holder,omitempty"` // owner username or project/group full path
+	Scopes     []string   `json:"scopes,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`   // nil = never expires
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"` // nil = never used / not exposed
+	CreatedAt  *time.Time `json:"created_at,omitempty"`
+	Active     bool       `json:"active"`
+	Revoked    bool       `json:"revoked"`
+}
+
+// DeployToken is a GitLab deploy token: a project- or group-scoped credential
+// (a username plus repository/registry scopes) used by automation. Unlike an
+// access token it has no per-token last-use, and the API never reveals the
+// secret.
+type DeployToken struct {
+	ID        int64      `json:"id"`
+	ScopeID   int64      `json:"scope_id,omitempty"` // owning project/group numeric id
+	Name      string     `json:"name"`
+	Username  string     `json:"username,omitempty"`
+	Kind      string     `json:"kind"`             // "project" | "group"
+	Holder    string     `json:"holder,omitempty"` // owning project/group full path
+	Scopes    []string   `json:"scopes,omitempty"` // read_repository, write_repository, read_registry, ...
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Revoked   bool       `json:"revoked"`
+}
+
+// OAuthApp is an OAuth application registered on the instance. Enumeration is
+// instance-admin-only on GitLab, so it is usually not collected; when it is,
+// Trusted (skips the user consent screen) and Confidential are the risk signals.
+type OAuthApp struct {
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	CallbackURL  string `json:"callback_url,omitempty"`
+	Confidential bool   `json:"confidential"`
+	Trusted      bool   `json:"trusted"`
 }
 
 // Webhook is an org- or repo-level webhook. The payload secret is never
@@ -304,6 +350,14 @@ type Snapshot struct {
 	SelfHostedRunners  []Runner     `json:"self_hosted_runners,omitempty"`
 	PendingInvitations []Invitation `json:"pending_invitations,omitempty"`
 	OrgSecrets         []OrgSecret  `json:"org_secrets,omitempty"`
+
+	// Provider-neutral scoped credentials. Currently populated by GitLab
+	// (personal/project/group access tokens, deploy tokens, OAuth apps); a
+	// GitHub collector leaves them empty and records no coverage, so their
+	// checks are skipped rather than reported clean.
+	AccessTokens []AccessToken `json:"access_tokens,omitempty"`
+	DeployTokens []DeployToken `json:"deploy_tokens,omitempty"`
+	OAuthApps    []OAuthApp    `json:"oauth_apps,omitempty"`
 
 	// GitHub-only: concepts with no GitLab equivalent. A non-GitHub collector
 	// leaves these empty and records no coverage for them, so the checks that

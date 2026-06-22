@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/sunnysystems/scopeward/internal/collect"
@@ -36,6 +37,14 @@ func teamsMock(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		if b, ok := body[r.URL.Path]; ok {
 			_, _ = w.Write([]byte(b))
+			return
+		}
+		// Non-human axis (#6) endpoints: the teams fixtures carry no tokens.
+		p := r.URL.Path
+		if p == "/api/v4/applications" || p == "/api/v4/personal_access_tokens" ||
+			strings.HasSuffix(p, "/access_tokens") || strings.HasSuffix(p, "/deploy_tokens") ||
+			strings.HasSuffix(p, "/deploy_keys") {
+			_, _ = w.Write([]byte(`[]`))
 			return
 		}
 		t.Errorf("unexpected request path: %s", r.URL.Path)

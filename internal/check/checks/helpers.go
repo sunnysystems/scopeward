@@ -9,6 +9,7 @@ package checks
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/sunnysystems/scopeward/internal/model"
 )
@@ -41,6 +42,30 @@ func repoRef(org string, r model.Repo) model.ResourceRef {
 		Name: org + "/" + r.Name,
 		URL:  "https://github.com/" + org + "/" + r.Name,
 	}
+}
+
+// repoDisplay is the human path of a repo for the current provider: GitHub repos
+// are "org/name"; GitLab project names already carry their full namespace path,
+// so prefixing the group would double it (acme/acme/api).
+func repoDisplay(s *model.Snapshot, r model.Repo) string {
+	if s.Provider == model.ProviderGitLab {
+		return r.Name
+	}
+	return s.Org.Login + "/" + r.Name
+}
+
+// repoResource builds a provider-aware ResourceRef for a repository/project. On
+// GitLab the web URL is derived from the instance host (when known) rather than
+// github.com.
+func repoResource(s *model.Snapshot, r model.Repo) model.ResourceRef {
+	if s.Provider == model.ProviderGitLab {
+		url := ""
+		if s.Host != "" {
+			url = strings.TrimRight(s.Host, "/") + "/" + r.Name
+		}
+		return model.ResourceRef{Type: "repo", ID: strconv.FormatInt(r.ID, 10), Name: r.Name, URL: url}
+	}
+	return repoRef(s.Org.Login, r)
 }
 
 // teamRef builds a ResourceRef pointing at a team.
