@@ -6,8 +6,8 @@ import (
 
 	"github.com/sunnysystems/scopeward/internal/check"
 	"github.com/sunnysystems/scopeward/internal/collect"
-	"github.com/sunnysystems/scopeward/internal/ghclient"
 	"github.com/sunnysystems/scopeward/internal/model"
+	"github.com/sunnysystems/scopeward/internal/provider"
 	"github.com/sunnysystems/scopeward/internal/report"
 	"github.com/sunnysystems/scopeward/internal/score"
 )
@@ -94,20 +94,19 @@ func (o *options) target(probeLogin string) (subject string, userMode, self bool
 	}
 }
 
-// buildAudit collects the subject (org or user), runs the mode-appropriate
-// checks, and scores them. Ignore/baseline filtering is applied by the caller.
-func buildAudit(ctx context.Context, client *ghclient.Client, subject string, userMode, self bool, opts *options, prog collect.Reporter) (report.Audit, error) {
+// buildAudit collects the subject (org or user) through the provider's
+// collector, runs the mode-appropriate checks, and scores them. Ignore/baseline
+// filtering is applied by the caller.
+func buildAudit(ctx context.Context, coll provider.Collector, subject string, userMode, self bool, opts *options, prog collect.Reporter) (report.Audit, error) {
 	co := collect.Options{Quick: opts.quick, MaxRepos: opts.maxRepos}
 
-	var (
-		snap *model.Snapshot
-		err  error
-	)
-	if userMode {
-		snap, err = collect.RunUser(ctx, client, subject, self, prog, co)
-	} else {
-		snap, err = collect.Run(ctx, client, subject, prog, co)
-	}
+	snap, err := coll.Collect(ctx, provider.Args{
+		Subject:  subject,
+		UserMode: userMode,
+		Self:     self,
+		Options:  co,
+		Progress: prog,
+	})
 	if err != nil {
 		return report.Audit{}, err
 	}

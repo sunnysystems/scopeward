@@ -1,0 +1,17 @@
+{
+  "provider": "github",
+  "login": "octocat",
+  "token_type": "classic_pat",
+  "token_source": "env (GITHUB_TOKEN)",
+  "scopes": [
+    "read:org",
+    "repo"
+  ],
+  "missing_recommended_scopes": [
+    "admin:org"
+  ],
+  "rate_limit": {
+    "limit": 5000,
+    "remaining": 4983
+  }
+}

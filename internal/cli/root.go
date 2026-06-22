@@ -20,9 +20,9 @@ import (
 	"github.com/sunnysystems/scopeward/internal/auth"
 	"github.com/sunnysystems/scopeward/internal/cache"
 	_ "github.com/sunnysystems/scopeward/internal/check/checks" // register all checks
-	"github.com/sunnysystems/scopeward/internal/ghclient"
 	"github.com/sunnysystems/scopeward/internal/model"
 	"github.com/sunnysystems/scopeward/internal/progress"
+	"github.com/sunnysystems/scopeward/internal/provider"
 	"github.com/sunnysystems/scopeward/internal/report"
 	"github.com/sunnysystems/scopeward/internal/score"
 	"github.com/sunnysystems/scopeward/internal/term"
@@ -35,6 +35,8 @@ import (
 var version = "dev"
 
 type options struct {
+	provider       string // github | gitlab (empty = auto-detect; default github)
+	host           string // self-managed instance base URL (e.g. https://gitlab.example.com)
 	org            string
 	me             bool   // audit the authenticated user's account/repos
 	user           string // audit a user's public account/repos
@@ -84,7 +86,9 @@ func Execute() int {
 		},
 	}
 
-	root.PersistentFlags().StringVarP(&opts.org, "org", "o", "", "GitHub organization to audit")
+	root.PersistentFlags().StringVar(&opts.provider, "provider", "", "forge to audit: github|gitlab (default github; gitlab when --host is a GitLab URL)")
+	root.PersistentFlags().StringVar(&opts.host, "host", "", "self-managed instance base URL, e.g. https://gitlab.example.com (default: the provider's SaaS host)")
+	root.PersistentFlags().StringVarP(&opts.org, "org", "o", "", "organization (GitHub) or top-level group (GitLab) to audit")
 	root.PersistentFlags().BoolVar(&opts.me, "me", false, "audit your own account and repositories (includes private)")
 	root.PersistentFlags().StringVar(&opts.user, "user", "", "audit a user's public account and repositories")
 	root.PersistentFlags().StringVarP(&opts.format, "format", "f", "auto", "output format: auto|text|json|markdown|sarif")
@@ -157,27 +161,55 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 		return err
 	}
 
-	tok, src, err := auth.Resolve(os.Stderr)
+	kind, err := provider.Parse(opts.provider, opts.host)
 	if err != nil {
 		return err
 	}
 
-	client := ghclient.New(tok)
-	probe, err := client.ProbeToken(ctx)
+	tok, tokenSource, err := provider.ResolveToken(kind, os.Stderr)
 	if err != nil {
 		return err
 	}
 
-	subject, userMode, self := opts.target(probe.Login)
+	coll, err := provider.New(provider.Config{
+		Provider:    kind,
+		Host:        opts.host,
+		Token:       tok,
+		TokenSource: tokenSource,
+	})
+	if err != nil {
+		return err
+	}
+
+	pf, err := coll.Preflight(ctx)
+	if err != nil {
+		return err
+	}
+
+	subject, userMode, self := opts.target(pf.Login)
 
 	// No subject given: this is just a token preflight.
 	if subject == "" {
 		if opts.format == "json" {
-			return renderProbeJSON(out, src, probe)
+			return renderProbeJSON(out, pf)
 		}
-		renderProbeText(out, src, probe)
+		renderProbeText(out, pf)
 		fmt.Fprintln(out)
 		fmt.Fprintln(out, ui.Subtle.Render("Pass --org <name>, --user <login>, or --me to run an audit."))
+		return nil
+	}
+
+	// Provider whose data collection is not built yet (GitLab → #4–#9): show the
+	// preflight so auth/connectivity/scopes are confirmed, then stop honestly
+	// rather than producing a misleading empty audit.
+	if !coll.CollectsData() {
+		if opts.format == "json" {
+			return renderProbeJSON(out, pf)
+		}
+		renderProbeText(out, pf)
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, ui.WarnTag.Render("⚠ "+provider.Title(kind)+" data collection is not implemented yet"))
+		fmt.Fprintln(out, ui.Subtle.Render("  Tracked in #4–#9. This release wires auth + client only."))
 		return nil
 	}
 
@@ -201,18 +233,18 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 			if opts.refresh {
 				dc.Clear() // fetch everything fresh this run, then rewrite the cache
 			}
-			client.SetCache(dc)
+			coll.SetCache(dc)
 			defer func() { _ = dc.Save() }()
 		}
 	}
 
 	prog := progress.New(os.Stderr, term.IsStderrTTY())
-	prog.SetRateFunc(client.RateStatus)
-	client.SetOnWait(func(d time.Duration) {
-		prog.Notice(fmt.Sprintf("GitHub rate limit reached; pausing %s for reset", d.Round(time.Second)))
+	prog.SetRateFunc(coll.RateStatus)
+	coll.SetOnWait(func(d time.Duration) {
+		prog.Notice(fmt.Sprintf("%s rate limit reached; pausing %s for reset", provider.Title(kind), d.Round(time.Second)))
 	})
 	prog.Start()
-	audit, err := buildAudit(ctx, client, subject, userMode, self, opts, prog)
+	audit, err := buildAudit(ctx, coll, subject, userMode, self, opts, prog)
 	prog.Stop()
 	if err != nil {
 		return err
