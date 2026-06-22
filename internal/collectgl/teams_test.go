@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/sunnysystems/scopeward/internal/collect"
@@ -39,17 +38,9 @@ func teamsMock(t *testing.T) *httptest.Server {
 			_, _ = w.Write([]byte(b))
 			return
 		}
-		// Non-human (#6) & CI/CD (#7) endpoints: the teams fixtures carry none.
-		p := r.URL.Path
-		if p == "/api/v4/applications" || p == "/api/v4/personal_access_tokens" ||
-			strings.HasSuffix(p, "/access_tokens") || strings.HasSuffix(p, "/deploy_tokens") ||
-			strings.HasSuffix(p, "/deploy_keys") || strings.HasSuffix(p, "/variables") ||
-			strings.HasSuffix(p, "/runners") {
-			_, _ = w.Write([]byte(`[]`))
-			return
-		}
-		if strings.HasSuffix(p, "/job_token_scope") {
-			_, _ = w.Write([]byte(`{"inbound_enabled":true}`))
+		// Non-human (#6), CI/CD (#7) & branch (#8) endpoints: the teams fixtures
+		// carry none, so serve benign empties.
+		if serveAuxEndpoints(w, r.URL.Path) {
 			return
 		}
 		t.Errorf("unexpected request path: %s", r.URL.Path)

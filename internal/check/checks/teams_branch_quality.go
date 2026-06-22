@@ -29,14 +29,16 @@ func (weakBranchProtection) Meta() check.CheckMeta {
 }
 
 func (c weakBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.Finding {
+	gitlab := s.Provider == model.ProviderGitLab
 	var out []model.Finding
 	for _, r := range s.Repos {
-		// Only classically-protected branches have assessable detail.
-		if r.BranchReqPRReview == nil {
-			continue
-		}
+		// Each weakness is assessed independently on whatever detail was collected:
+		// on GitLab Free, force-push is knowable from protected branches while
+		// required-review (approval rules) is not, so they must not gate each other.
 		var weaknesses []string
-		if !*r.BranchReqPRReview {
+		// Requiring review only makes sense when a second person can approve; --solo
+		// or a <2-member group suppresses it (you cannot approve your own change).
+		if r.BranchReqPRReview != nil && !*r.BranchReqPRReview && reviewExpected(s) {
 			weaknesses = append(weaknesses, "no required pull-request review")
 		}
 		if r.BranchAllowForcePush != nil && *r.BranchAllowForcePush {
@@ -45,18 +47,24 @@ func (c weakBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.
 		if len(weaknesses) == 0 {
 			continue
 		}
+		docs := "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches"
+		remediation := "Require at least one approving pull-request review and disable force-pushes on the default branch (also consider requiring status checks and signed commits)."
+		if gitlab {
+			docs = glBranchDocs
+			remediation = "Require merge-request approvals (Premium) and disable force-push on the protected branch; protection takes effect when the relevant branches are themselves protected."
+		}
 		f := model.Finding{
 			CheckID:     c.Meta().ID,
-			Title:       "Weak protection on " + s.Org.Login + "/" + r.Name + " (" + strings.Join(weaknesses, ", ") + ")",
+			Title:       "Weak protection on " + repoDisplay(s, r) + " (" + strings.Join(weaknesses, ", ") + ")",
 			Severity:    model.SevHigh,
 			Axis:        model.AxisTeams,
-			Resource:    repoRef(s.Org.Login, r),
+			Resource:    repoResource(s, r),
 			Evidence:    map[string]any{"repo": r.Name, "default_branch": r.DefaultBranch, "weaknesses": weaknesses},
 			Description: "The default branch is protected, but the protection has gaps: changes can land without review, or history can be rewritten with a force-push. Either undermines the guarantee that what is on main was reviewed and is immutable.",
-			Remediation: "Require at least one approving pull-request review and disable force-pushes on the default branch (also consider requiring status checks and signed commits).",
-			DocsURL:     "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches",
+			Remediation: remediation,
+			DocsURL:     docs,
 		}
-		if branchProtectable(r.Private, s.Org.Plan) {
+		if !gitlab && branchProtectable(r.Private, s.Org.Plan) {
 			f = withFix(f, ghProtectBranch(s.Org.Login, r.Name, r.DefaultBranch, reviewExpected(s)))
 		}
 		out = append(out, f)

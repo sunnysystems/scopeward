@@ -66,8 +66,10 @@ func cicdMock(t *testing.T) *httptest.Server {
 			write(`[]`)
 
 		default:
-			t.Errorf("unexpected request path: %s", p)
-			w.WriteHeader(http.StatusNotFound)
+			if !serveAuxEndpoints(w, p) {
+				t.Errorf("unexpected request path: %s", p)
+				w.WriteHeader(http.StatusNotFound)
+			}
 		}
 	}))
 }

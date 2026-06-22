@@ -164,6 +164,13 @@ type Repo struct {
 	// CI_JOB_TOKEN inbound allowlist (GitLab): true = only allowlisted projects'
 	// job tokens may access it; false = any project's token can. nil = unknown.
 	JobTokenInboundEnabled *bool `json:"job_token_inbound_enabled,omitempty"`
+	// GitLab merge-request approval settings (Premium). nil = not collected (Free
+	// tier or insufficient access), so the approval check reports "not evaluated".
+	// MRApprovalsRequired feeds the neutral BranchReqPRReview (>=1 → review required).
+	MRApprovalsRequired       *int  `json:"mr_approvals_required,omitempty"`
+	MRAuthorCanApprove        *bool `json:"mr_author_can_approve,omitempty"`      // true = author may approve own MR
+	MRResetApprovalsOnPush    *bool `json:"mr_reset_approvals_on_push,omitempty"` // false = stale approvals survive a new push
+	CodeOwnerApprovalRequired *bool `json:"code_owner_approval_required,omitempty"`
 }
 
 // DependabotAlertSummary counts a repo's open Dependabot (vulnerability) alerts

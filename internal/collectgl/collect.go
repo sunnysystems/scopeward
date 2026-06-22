@@ -4,10 +4,11 @@
 // coverage; the pure checks read the resulting snapshot and never re-query.
 //
 // The identity (#4), teams/permissions (#5), non-human identity (#6,
-// tokens/deploy keys/OAuth), and CI/CD (#7, variables/runners/job-token scope)
-// axes are implemented here. Data that is not yet collected (SAML/SCIM,
-// protected branches) is recorded as a coverage gap so dependent checks degrade
-// to "not evaluated" rather than a false pass; those axes land in #8–#9.
+// tokens/deploy keys/OAuth), CI/CD (#7, variables/runners/job-token scope), and
+// branch-protection/approval/CODEOWNERS (#8) axes are implemented here. Data
+// that is not yet collected (SAML/SCIM) is recorded as a coverage gap so
+// dependent checks degrade to "not evaluated" rather than a false pass; that
+// axis lands in #9.
 package collectgl
 
 import (
@@ -70,6 +71,9 @@ func RunGroup(ctx context.Context, client *glclient.Client, group, host string, 
 
 	prog.Stage("collecting CI/CD variables, runners & job-token scope")
 	collectCICD(ctx, client, snap, opts)
+
+	prog.Stage("collecting protected branches, approval rules & CODEOWNERS")
+	collectBranches(ctx, client, snap, opts)
 
 	markNotCollected(snap)
 
@@ -139,9 +143,10 @@ func markNotCollected(snap *model.Snapshot) {
 	// dependent checks report "not evaluated" rather than a false pass.
 	snap.Coverage.Missing(model.DataCustomRoles, "GitLab custom roles are Ultimate-only; not evaluated")
 	snap.Coverage.Missing(model.DataOrgRoles, "GitLab has no organization-roles equivalent")
-	snap.Coverage.Missing(model.DataOrgRulesets, "GitLab uses protected branches & push rules (collected separately, #8)")
+	snap.Coverage.Missing(model.DataOrgRulesets, "GitLab uses per-project protected branches & push rules (collected as branch protection, #8)")
 	snap.Coverage.Missing(model.DataCustomProperties, "GitLab has no repository custom-properties equivalent")
-	snap.Coverage.Missing(model.DataCodeowners, "GitLab CODEOWNERS & approval rules are collected separately (#8)")
+	// Branch protection, MR approval rules & CODEOWNERS are collected by
+	// collectBranches (#8); they are not marked here.
 }
 
 // reasonFor turns a GitLab API error into a short human reason for a coverage
