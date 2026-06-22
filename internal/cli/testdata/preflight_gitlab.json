@@ -1,0 +1,15 @@
+{
+  "provider": "gitlab",
+  "host": "https://gitlab.example.com",
+  "login": "root",
+  "token_type": "personal_access_token",
+  "token_source": "env (GITLAB_TOKEN)",
+  "scopes": [
+    "read_api",
+    "read_user"
+  ],
+  "rate_limit": {
+    "limit": 2000,
+    "remaining": 1999
+  }
+}
