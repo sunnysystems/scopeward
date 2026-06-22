@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"io"
 	"testing"
 
@@ -91,7 +90,7 @@ func TestNewUnknownProvider(t *testing.T) {
 	}
 }
 
-func TestGitLabCollectorIsStubbed(t *testing.T) {
+func TestGitLabCollector(t *testing.T) {
 	coll, err := New(Config{
 		Provider: model.ProviderGitLab,
 		Host:     "https://gitlab.example.com",
@@ -103,11 +102,13 @@ func TestGitLabCollectorIsStubbed(t *testing.T) {
 	if coll.Kind() != model.ProviderGitLab {
 		t.Errorf("Kind = %q, want gitlab", coll.Kind())
 	}
-	if coll.CollectsData() {
-		t.Error("GitLab collector should report CollectsData() == false until #4–#9")
+	if !coll.CollectsData() {
+		t.Error("GitLab collector now collects the identity axis (#4)")
 	}
-	if _, err := coll.Collect(context.Background(), Args{Subject: "acme"}); !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("Collect err = %v, want ErrNotImplemented", err)
+	// User/account audits aren't modeled yet; that path must error without a
+	// network call (group collection is exercised in internal/collectgl).
+	if _, err := coll.Collect(context.Background(), Args{UserMode: true, Subject: "someone"}); err == nil {
+		t.Error("GitLab user-mode Collect should return an error")
 	}
 }
 

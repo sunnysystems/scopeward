@@ -82,6 +82,10 @@ type Member struct {
 	SAMLLinked       *bool  `json:"saml_linked,omitempty"`        // nil = unknown / SAML off
 	SAMLNameID       string `json:"saml_name_id,omitempty"`       // IdP-asserted identity (usually corporate email)
 	IsBot            bool   `json:"is_bot"`                       // GitHub account type == Bot
+	// LastActiveAt is the member's last activity timestamp, when the provider
+	// exposes it (GitLab last_activity_on, instance-admin-only). nil = unknown /
+	// not collected; the dormant-member check gates on DataMemberActivity coverage.
+	LastActiveAt *time.Time `json:"last_active_at,omitempty"`
 }
 
 // Collaborator is an outside collaborator (not an org member) with repo access.

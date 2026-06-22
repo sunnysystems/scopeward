@@ -5,13 +5,14 @@
 // token resolution and scope guidance.
 //
 // Collection itself is provider-specific and lives behind each Collector: GitHub
-// delegates to internal/collect; GitLab's collectors land in #4–#9, so its
-// Collect is not implemented yet (gate on CollectsData).
+// delegates to internal/collect; GitLab delegates to internal/collectgl, which
+// currently covers the human-identity axis (#4) with the remaining axes (#5–#9)
+// landing as coverage gaps until built. CollectsData reports whether a provider
+// can audit at all yet.
 package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -21,11 +22,6 @@ import (
 	"github.com/sunnysystems/scopeward/internal/collect"
 	"github.com/sunnysystems/scopeward/internal/model"
 )
-
-// ErrNotImplemented is returned by a Collector whose data collection is not yet
-// built (today: GitLab — tracked in #4–#9). Gate on CollectsData before calling
-// Collect to surface this as a clean message rather than an error.
-var ErrNotImplemented = errors.New("data collection is not implemented for this provider yet")
 
 // Cache is the disk ETag cache shared by the underlying clients; *cache.Disk
 // satisfies it (and ghclient.Cache / glclient.Cache) structurally.
