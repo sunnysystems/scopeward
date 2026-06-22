@@ -16,7 +16,8 @@ import (
 // requires any of them is org-scoped and is skipped in user/account mode.
 var orgScopedKinds = map[model.DataKind]bool{
 	model.DataOrg: true, model.DataMembers: true, model.DataMember2FA: true,
-	model.DataMemberRoles: true, model.DataSAMLIdentities: true, model.DataOutsideCollaborators: true,
+	model.DataMemberRoles: true, model.DataMemberActivity: true,
+	model.DataSAMLIdentities: true, model.DataOutsideCollaborators: true,
 	model.DataTeams: true, model.DataTeamMembers: true, model.DataTeamRepos: true,
 	model.DataCustomProperties: true,
 	model.DataAppInstallations: true, model.DataActionsTokenDefault: true,

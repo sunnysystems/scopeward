@@ -15,6 +15,7 @@ const (
 	DataMembers              DataKind = "members"
 	DataMember2FA            DataKind = "members.2fa"
 	DataMemberRoles          DataKind = "members.roles"
+	DataMemberActivity       DataKind = "members.activity" // last-activity timestamps (member dormancy)
 	DataSAMLIdentities       DataKind = "members.saml"
 	DataOutsideCollaborators DataKind = "outside_collaborators"
 

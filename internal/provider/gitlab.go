@@ -2,15 +2,17 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/sunnysystems/scopeward/internal/collectgl"
 	"github.com/sunnysystems/scopeward/internal/glclient"
 	"github.com/sunnysystems/scopeward/internal/model"
 )
 
-// gitlabCollector wires GitLab auth + client + preflight. Data collection itself
-// is not implemented yet (#4–#9): CollectsData reports false so the CLI stops
-// after a successful preflight rather than producing a misleading empty audit.
+// gitlabCollector wires GitLab auth + client + preflight, and collects the
+// human-identity axis for a group (#4). Other axes (teams/projects, non-human,
+// CI, branches, SSO) land in #5–#9 and are recorded as coverage gaps until then.
 type gitlabCollector struct {
 	client      *glclient.Client
 	host        string
@@ -26,7 +28,7 @@ func newGitLabCollector(cfg Config) *gitlabCollector {
 }
 
 func (g *gitlabCollector) Kind() model.Provider { return model.ProviderGitLab }
-func (g *gitlabCollector) CollectsData() bool   { return false } // until #4–#9
+func (g *gitlabCollector) CollectsData() bool   { return true }
 
 func (g *gitlabCollector) SetCache(c Cache)                 { g.client.SetCache(c) }
 func (g *gitlabCollector) SetOnWait(fn func(time.Duration)) { g.client.SetOnWait(fn) }
@@ -59,6 +61,11 @@ func (g *gitlabCollector) Preflight(ctx context.Context) (*Preflight, error) {
 	return pf, nil
 }
 
-func (g *gitlabCollector) Collect(_ context.Context, _ Args) (*model.Snapshot, error) {
-	return nil, ErrNotImplemented
+func (g *gitlabCollector) Collect(ctx context.Context, a Args) (*model.Snapshot, error) {
+	if a.UserMode {
+		// GitLab user/account audits aren't modeled yet; group audits are the
+		// governance focus. Surface this clearly rather than silently empty.
+		return nil, errors.New("GitLab user/account audits aren't supported yet — audit a group with --org")
+	}
+	return collectgl.RunGroup(ctx, g.client, a.Subject, g.host, a.Progress, a.Options)
 }
