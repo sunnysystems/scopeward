@@ -3,11 +3,11 @@
 // internal/collect (GitHub) package: collectors do all the I/O and record
 // coverage; the pure checks read the resulting snapshot and never re-query.
 //
-// The identity (#4), teams/permissions (#5), and non-human identity (#6,
-// tokens/deploy keys/OAuth) axes are implemented here. Data that is not yet
-// collected (SAML/SCIM, CI/CD, protected branches) is recorded as a coverage
-// gap so dependent checks degrade to "not evaluated" rather than a false pass;
-// those axes land in #7–#9.
+// The identity (#4), teams/permissions (#5), non-human identity (#6,
+// tokens/deploy keys/OAuth), and CI/CD (#7, variables/runners/job-token scope)
+// axes are implemented here. Data that is not yet collected (SAML/SCIM,
+// protected branches) is recorded as a coverage gap so dependent checks degrade
+// to "not evaluated" rather than a false pass; those axes land in #8–#9.
 package collectgl
 
 import (
@@ -67,6 +67,9 @@ func RunGroup(ctx context.Context, client *glclient.Client, group, host string, 
 
 	prog.Stage("collecting tokens, deploy keys & OAuth apps")
 	collectNonHuman(ctx, client, snap, opts)
+
+	prog.Stage("collecting CI/CD variables, runners & job-token scope")
+	collectCICD(ctx, client, snap, opts)
 
 	markNotCollected(snap)
 

@@ -160,6 +160,10 @@ type Repo struct {
 	Properties        map[string]string `json:"properties,omitempty"`
 	CodeownersPresent *bool             `json:"codeowners_present,omitempty"`
 	CodeownersTeams   []string          `json:"codeowners_teams,omitempty"`
+	// JobTokenInboundEnabled reports whether this project enforces the
+	// CI_JOB_TOKEN inbound allowlist (GitLab): true = only allowlisted projects'
+	// job tokens may access it; false = any project's token can. nil = unknown.
+	JobTokenInboundEnabled *bool `json:"job_token_inbound_enabled,omitempty"`
 }
 
 // DependabotAlertSummary counts a repo's open Dependabot (vulnerability) alerts
@@ -298,6 +302,39 @@ type OAuthApp struct {
 	Trusted      bool   `json:"trusted"`
 }
 
+// CIVariable is a GitLab CI/CD variable defined on a project or group. The value
+// is never collected. Protected limits the variable to pipelines on protected
+// branches/tags; Masked hides it in job logs; Hidden (17.4+) also prevents the
+// value from being read back via the API; EnvironmentScope ("*" = all) bounds
+// which environments may use it.
+type CIVariable struct {
+	Key              string `json:"key"`
+	Kind             string `json:"kind"`             // "project" | "group"
+	Holder           string `json:"holder,omitempty"` // owning project/group full path
+	ScopeID          int64  `json:"scope_id,omitempty"`
+	VariableType     string `json:"variable_type,omitempty"` // "env_var" | "file"
+	Protected        bool   `json:"protected"`
+	Masked           bool   `json:"masked"`
+	Hidden           bool   `json:"hidden,omitempty"`
+	EnvironmentScope string `json:"environment_scope,omitempty"`
+}
+
+// CIRunner is a GitLab CI runner. RunnerType is instance_type (shared across all
+// projects), group_type, or project_type. RefProtected reports whether the
+// runner only picks up jobs from protected branches/tags; Online and the other
+// fields come from the runner detail endpoint.
+type CIRunner struct {
+	ID           int64    `json:"id"`
+	Description  string   `json:"description,omitempty"`
+	RunnerType   string   `json:"runner_type,omitempty"` // instance_type | group_type | project_type
+	Shared       bool     `json:"shared"`                // instance_type: available to every project
+	RefProtected bool     `json:"ref_protected"`         // access_level == ref_protected
+	Locked       bool     `json:"locked"`
+	Online       *bool    `json:"online,omitempty"` // nil = unknown
+	TagList      []string `json:"tag_list,omitempty"`
+	Holder       string   `json:"holder,omitempty"` // owning group/project path (group/project runners)
+}
+
 // Webhook is an org- or repo-level webhook. The payload secret is never
 // retrieved; HasSecret only reflects whether one is configured.
 type Webhook struct {
@@ -358,6 +395,11 @@ type Snapshot struct {
 	AccessTokens []AccessToken `json:"access_tokens,omitempty"`
 	DeployTokens []DeployToken `json:"deploy_tokens,omitempty"`
 	OAuthApps    []OAuthApp    `json:"oauth_apps,omitempty"`
+
+	// GitLab CI/CD hardening (#7): project & group CI/CD variables and runners.
+	// The per-project CI_JOB_TOKEN allowlist lives on each Repo.
+	CIVariables []CIVariable `json:"ci_variables,omitempty"`
+	CIRunners   []CIRunner   `json:"ci_runners,omitempty"`
 
 	// GitHub-only: concepts with no GitLab equivalent. A non-GitHub collector
 	// leaves these empty and records no coverage for them, so the checks that

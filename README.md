@@ -19,7 +19,7 @@ One command. Zero config. Nothing hosted. Built by [Sunny Systems](https://githu
 ---
 
 `scopeward` connects to GitHub with a **read-only** token, scores your
-organization's governance posture across **65 checks in seven axes**, and tells
+organization's governance posture across **68 checks in seven axes**, and tells
 you exactly what to fix, all without ever writing to GitHub, persisting your
 token, or sending a single byte off your machine.
 
@@ -114,7 +114,7 @@ scopeward tui --org my-org             # browse findings in an interactive TUI
 |------|----------|
 | **Human Identity** | members without 2FA, org-wide 2FA not enforced, accounts outside SSO, SSO emails off the company domain, outside collaborators, owner sprawl, stale invitations |
 | **Teams & Permissions** | over-permissive base permission, direct admin/repo grants that bypass teams, deep nesting, team sprawl, ghost/orphan/empty/singleton teams, ownership gaps (no owning team / CODEOWNERS), weak or unenforced branch protection & rulesets, elevated custom roles |
-| **Non-Human Identities** | GitHub Apps with write/admin, writable deploy keys, webhooks without a secret or with SSL disabled, non-expiring PATs, broad classic PATs, org secrets visible to all repos, open Actions policy, self-hosted runners, `GITHUB_TOKEN` defaulting to write, Actions that can approve PRs; on GitLab: non-expiring / broadly-scoped / stale personal, project & group access tokens, non-expiring deploy tokens, trusted or public OAuth apps |
+| **Non-Human Identities** | GitHub Apps with write/admin, writable deploy keys, webhooks without a secret or with SSL disabled, non-expiring PATs, broad classic PATs, org secrets visible to all repos, open Actions policy, self-hosted runners, `GITHUB_TOKEN` defaulting to write, Actions that can approve PRs; on GitLab: non-expiring / broadly-scoped / stale personal, project & group access tokens, non-expiring deploy tokens, trusted or public OAuth apps, unprotected CI/CD secret variables, runners usable from unprotected refs, CI_JOB_TOKEN allowlist disabled |
 | **AI Agents** | inventory of bot/machine committers, agents committing with over-broad write scope, unidentified bot committers, agents pushing to unprotected branches, idle/non-member Copilot seats |
 | **Code Security** | secret scanning / push protection / Dependabot alerts off by default, repos without push protection or with Dependabot alerts disabled, open (leaked) secret-scanning alerts, open Dependabot vulnerability alerts |
 | **Supply Chain** | unpinned third-party Actions, `pull_request_target` triggers |

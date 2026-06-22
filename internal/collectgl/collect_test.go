@@ -47,9 +47,13 @@ func gitlabMock(t *testing.T, isAdmin bool) *httptest.Server {
 			r.URL.Path == "/api/v4/personal_access_tokens",
 			strings.HasSuffix(r.URL.Path, "/access_tokens"),
 			strings.HasSuffix(r.URL.Path, "/deploy_tokens"),
-			strings.HasSuffix(r.URL.Path, "/deploy_keys"):
-			// Non-human axis: identity-axis fixtures carry no tokens.
+			strings.HasSuffix(r.URL.Path, "/deploy_keys"),
+			strings.HasSuffix(r.URL.Path, "/variables"),
+			strings.HasSuffix(r.URL.Path, "/runners"):
+			// Non-human & CI/CD axes: identity-axis fixtures carry none.
 			_, _ = w.Write([]byte(`[]`))
+		case strings.HasSuffix(r.URL.Path, "/job_token_scope"):
+			_, _ = w.Write([]byte(`{"inbound_enabled":true}`))
 		default:
 			t.Errorf("unexpected request path: %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/sunnysystems/scopeward/internal/collect"
@@ -45,6 +46,16 @@ func nonhumanMock(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		if b, ok := body[r.URL.Path]; ok {
 			_, _ = w.Write([]byte(b))
+			return
+		}
+		// CI/CD (#7) endpoints: the non-human fixtures carry no CI data.
+		p := r.URL.Path
+		if strings.HasSuffix(p, "/variables") || strings.HasSuffix(p, "/runners") {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		if strings.HasSuffix(p, "/job_token_scope") {
+			_, _ = w.Write([]byte(`{"inbound_enabled":true}`))
 			return
 		}
 		t.Errorf("unexpected request path: %s", r.URL.Path)
