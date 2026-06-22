@@ -25,6 +25,9 @@ func gitlabMock(t *testing.T, isAdmin bool) *httptest.Server {
 			_, _ = w.Write([]byte(`{"id":10,"name":"Acme","full_path":"acme","require_two_factor_authentication":true}`))
 		case r.URL.Path == "/api/v4/groups/acme/members/all":
 			_, _ = w.Write([]byte(`[{"id":1,"username":"root","access_level":50},{"id":2,"username":"dev","access_level":30}]`))
+		case r.URL.Path == "/api/v4/groups/acme/descendant_groups", r.URL.Path == "/api/v4/groups/acme/projects":
+			// No subgroups/projects in the identity-axis fixtures.
+			_, _ = w.Write([]byte(`[]`))
 		case r.URL.Path == "/api/v4/user":
 			if isAdmin {
 				_, _ = w.Write([]byte(`{"username":"root","is_admin":true}`))

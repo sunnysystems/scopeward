@@ -61,10 +61,37 @@ func RunGroup(ctx context.Context, client *glclient.Client, group, host string, 
 		enrichMembers(ctx, client, snap)
 	}
 
+	prog.Stage("collecting subgroups & projects")
+	collectTeamsAndProjects(ctx, client, group, snap, opts)
+
 	markNotCollected(snap)
 
 	snap.CollectedAt = Now()
 	return snap, nil
+}
+
+// collectTeamsAndProjects maps the GitLab subgroup tree onto neutral teams and
+// projects onto repositories — including each team's repo grants and each
+// project's direct member grants. The group-level lists (subgroups, projects) are
+// always fetched; the per-subgroup and per-project membership passes are skipped
+// in --quick mode, mirroring the GitHub collector.
+func collectTeamsAndProjects(ctx context.Context, client *glclient.Client, group string, snap *model.Snapshot, opts collect.Options) {
+	if teams, err := fetchSubgroups(ctx, client, group, snap.Org.ID); err != nil {
+		snap.Coverage.Missing(model.DataTeams, reasonFor(err, "listing subgroups"))
+	} else {
+		snap.Teams = teams
+		snap.Coverage.OK(model.DataTeams, len(teams))
+	}
+
+	collectProjects(ctx, client, group, snap)
+
+	if opts.Quick {
+		snap.Coverage.Missing(model.DataTeamMembers, "skipped in --quick mode (group-level only)")
+		snap.Coverage.Missing(model.DataRepoDirectCollaborators, "skipped in --quick mode (group-level only)")
+		return
+	}
+	collectSubgroupMembers(ctx, client, snap)
+	collectProjectMembers(ctx, client, snap)
 }
 
 // collectGroup reads group-level settings, notably the 2FA-enforcement flag that
@@ -99,8 +126,15 @@ func collectGroup(ctx context.Context, client *glclient.Client, group string, sn
 // evaluated" with a clear reason instead of silently passing.
 func markNotCollected(snap *model.Snapshot) {
 	snap.Coverage.Missing(model.DataSAMLIdentities, "GitLab SSO/SAML & SCIM identities are collected separately (#9)")
-	snap.Coverage.Missing(model.DataOutsideCollaborators, "GitLab has no direct equivalent; modeled via project membership, collected with projects (#5)")
+	snap.Coverage.Missing(model.DataOutsideCollaborators, "GitLab has no direct equivalent; outside-collaborator modeling lands later")
 	snap.Coverage.Missing(model.DataPendingInvitations, "pending group invitations are not collected yet")
+	// Teams-axis concepts with no GitLab equivalent (or gated by tier): the
+	// dependent checks report "not evaluated" rather than a false pass.
+	snap.Coverage.Missing(model.DataCustomRoles, "GitLab custom roles are Ultimate-only; not evaluated")
+	snap.Coverage.Missing(model.DataOrgRoles, "GitLab has no organization-roles equivalent")
+	snap.Coverage.Missing(model.DataOrgRulesets, "GitLab uses protected branches & push rules (collected separately, #8)")
+	snap.Coverage.Missing(model.DataCustomProperties, "GitLab has no repository custom-properties equivalent")
+	snap.Coverage.Missing(model.DataCodeowners, "GitLab CODEOWNERS & approval rules are collected separately (#8)")
 }
 
 // reasonFor turns a GitLab API error into a short human reason for a coverage
