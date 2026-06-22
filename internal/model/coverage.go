@@ -40,6 +40,12 @@ const (
 	DataDeployTokens DataKind = "deploy_tokens"
 	DataOAuthApps    DataKind = "oauth_apps"
 
+	// GitLab CI/CD hardening: variables, runners, and the per-project
+	// CI_JOB_TOKEN inbound allowlist.
+	DataCIVariables   DataKind = "ci_variables"
+	DataCIRunners     DataKind = "ci_runners"
+	DataJobTokenScope DataKind = "repos.job_token_scope"
+
 	DataCommitAuthors DataKind = "repos.commit_authors"
 
 	DataBranchProtection         DataKind = "repos.branch_protection"
