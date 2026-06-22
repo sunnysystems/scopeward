@@ -43,6 +43,13 @@ func gitlabMock(t *testing.T, isAdmin bool) *httptest.Server {
 			} else {
 				_, _ = w.Write([]byte(`{"two_factor_enabled":false,"last_activity_on":"2024-12-01"}`))
 			}
+		case r.URL.Path == "/api/v4/applications",
+			r.URL.Path == "/api/v4/personal_access_tokens",
+			strings.HasSuffix(r.URL.Path, "/access_tokens"),
+			strings.HasSuffix(r.URL.Path, "/deploy_tokens"),
+			strings.HasSuffix(r.URL.Path, "/deploy_keys"):
+			// Non-human axis: identity-axis fixtures carry no tokens.
+			_, _ = w.Write([]byte(`[]`))
 		default:
 			t.Errorf("unexpected request path: %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)

@@ -34,6 +34,12 @@ const (
 	DataRepoWebhooks        DataKind = "repos.webhooks"
 	DataFineGrainedPATs     DataKind = "fine_grained_pats"
 
+	// Provider-neutral scoped credentials, currently populated by GitLab:
+	// personal/project/group access tokens, deploy tokens, and OAuth apps.
+	DataAccessTokens DataKind = "access_tokens"
+	DataDeployTokens DataKind = "deploy_tokens"
+	DataOAuthApps    DataKind = "oauth_apps"
+
 	DataCommitAuthors DataKind = "repos.commit_authors"
 
 	DataBranchProtection         DataKind = "repos.branch_protection"
