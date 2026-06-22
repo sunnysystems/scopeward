@@ -25,18 +25,32 @@ func (unprotectedDefaultBranch) Meta() check.CheckMeta {
 	}
 }
 
+// GitLab branch-protection remediation/docs. Protected branches are available on
+// every GitLab tier, so (unlike GitHub's plan-gated private repos) the advice is
+// unconditional; the glab/API fix command lands with the fixer abstraction (#10).
+const (
+	glBranchDocs        = "https://docs.gitlab.com/ee/user/project/repository/branches/protected.html"
+	glBranchRemediation = "Protect the default branch (Settings > Repository > Protected branches): restrict who can push and require changes through a merge request. On Premium, also require merge-request approvals and enable Code Owner approval."
+)
+
 func (c unprotectedDefaultBranch) Run(_ context.Context, s *model.Snapshot) []model.Finding {
+	gitlab := s.Provider == model.ProviderGitLab
 	var out []model.Finding
 	for _, r := range s.Repos {
 		if r.DefaultBranchProtected == nil || *r.DefaultBranchProtected {
 			continue // unknown or protected
 		}
+		remediation := branchRemediation(r.Private, s.Org.Plan)
+		docs := "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
+		if gitlab {
+			remediation, docs = glBranchRemediation, glBranchDocs
+		}
 		f := model.Finding{
 			CheckID:  c.Meta().ID,
-			Title:    "Default branch \"" + r.DefaultBranch + "\" of " + s.Org.Login + "/" + r.Name + " is not protected",
+			Title:    "Default branch \"" + r.DefaultBranch + "\" of " + repoDisplay(s, r) + " is not protected",
 			Severity: model.SevHigh,
 			Axis:     model.AxisTeams,
-			Resource: repoRef(s.Org.Login, r),
+			Resource: repoResource(s, r),
 			Evidence: map[string]any{
 				"repo":           r.Name,
 				"default_branch": r.DefaultBranch,
@@ -44,12 +58,13 @@ func (c unprotectedDefaultBranch) Run(_ context.Context, s *model.Snapshot) []mo
 				"org_plan":       s.Org.Plan,
 			},
 			Description: "Anyone with write access can push (or force-push) directly to this branch with no pull request, review, or status check. That removes the main guardrail against mistakes and malicious or AI-agent commits reaching production code.",
-			Remediation: branchRemediation(r.Private, s.Org.Plan),
-			DocsURL:     "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets",
+			Remediation: remediation,
+			DocsURL:     docs,
 		}
-		// Only suggest a command where protecting the branch is actually possible:
-		// it is free for public repos but needs GitHub Team+ for private repos.
-		if branchProtectable(r.Private, s.Org.Plan) {
+		// GitHub: only suggest a command where protecting the branch is possible
+		// (free for public repos, GitHub Team+ for private). GitLab: protectable on
+		// any tier, but the glab command is deferred to the fixer abstraction (#10).
+		if !gitlab && branchProtectable(r.Private, s.Org.Plan) {
 			f = withFix(f, ghProtectBranch(s.Org.Login, r.Name, r.DefaultBranch, reviewExpected(s)))
 		}
 		out = append(out, f)

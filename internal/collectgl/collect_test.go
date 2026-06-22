@@ -54,11 +54,44 @@ func gitlabMock(t *testing.T, isAdmin bool) *httptest.Server {
 			_, _ = w.Write([]byte(`[]`))
 		case strings.HasSuffix(r.URL.Path, "/job_token_scope"):
 			_, _ = w.Write([]byte(`{"inbound_enabled":true}`))
+		case strings.HasSuffix(r.URL.Path, "/protected_branches"),
+			strings.HasSuffix(r.URL.Path, "/approval_rules"):
+			_, _ = w.Write([]byte(`[]`))
+		case strings.HasSuffix(r.URL.Path, "/approvals"):
+			_, _ = w.Write([]byte(`{}`))
+		case strings.Contains(r.URL.Path, "/repository/files/"):
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
 		default:
 			t.Errorf("unexpected request path: %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
+}
+
+// serveAuxEndpoints answers the non-human (#6), CI/CD (#7), and branch (#8)
+// per-resource endpoints with benign empties, so a mock focused on one axis still
+// completes RunGroup for the others. A mock's own explicit cases take precedence
+// (they are matched before this fallback). Returns true when it handled the path.
+func serveAuxEndpoints(w http.ResponseWriter, p string) bool {
+	switch {
+	case p == "/api/v4/applications", p == "/api/v4/personal_access_tokens",
+		strings.HasSuffix(p, "/access_tokens"), strings.HasSuffix(p, "/deploy_tokens"),
+		strings.HasSuffix(p, "/deploy_keys"), strings.HasSuffix(p, "/variables"),
+		strings.HasSuffix(p, "/runners"), strings.HasSuffix(p, "/protected_branches"),
+		strings.HasSuffix(p, "/approval_rules"):
+		_, _ = w.Write([]byte(`[]`))
+	case strings.HasSuffix(p, "/approvals"):
+		_, _ = w.Write([]byte(`{}`))
+	case strings.HasSuffix(p, "/job_token_scope"):
+		_, _ = w.Write([]byte(`{"inbound_enabled":true}`))
+	case strings.Contains(p, "/repository/files/"):
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
+	default:
+		return false
+	}
+	return true
 }
 
 func newClient(srv *httptest.Server) *glclient.Client {

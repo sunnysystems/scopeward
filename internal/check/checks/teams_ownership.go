@@ -16,6 +16,16 @@ func init() {
 
 const ownershipDocsURL = "https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners"
 
+const glCodeownersDocsURL = "https://docs.gitlab.com/ee/user/project/codeowners/"
+
+// ownershipDocs returns the provider-appropriate code-ownership docs URL.
+func ownershipDocs(s *model.Snapshot) string {
+	if s.Provider == model.ProviderGitLab {
+		return glCodeownersDocsURL
+	}
+	return ownershipDocsURL
+}
+
 // repoNoOwningTeam flags repositories that no team has any access to. Access
 // then flows only from direct grants (or org-owner admin), so there is no team
 // accountable for the repo and offboarding has to be done person-by-person.
@@ -47,14 +57,14 @@ func (c repoNoOwningTeam) Run(_ context.Context, s *model.Snapshot) []model.Find
 		}
 		out = append(out, model.Finding{
 			CheckID:     c.Meta().ID,
-			Title:       fmt.Sprintf("Repository %s/%s has no team with access", s.Org.Login, r.Name),
+			Title:       fmt.Sprintf("Repository %s has no team with access", repoDisplay(s, r)),
 			Severity:    model.SevMedium,
 			Axis:        model.AxisTeams,
-			Resource:    repoRef(s.Org.Login, r),
+			Resource:    repoResource(s, r),
 			Evidence:    map[string]any{"repo": r.Name, "direct_collaborators": len(r.DirectCollaborators)},
 			Description: "No team grants access to this repository, so whatever access exists comes from individual direct grants or org-wide admin. There is no team that owns it, which makes access reviews and offboarding error-prone.",
 			Remediation: "Grant an owning team (maintain or admin) the access it needs, and move individual grants into that team.",
-			DocsURL:     ownershipDocsURL,
+			DocsURL:     ownershipDocs(s),
 		})
 	}
 	return out
@@ -144,10 +154,10 @@ func (c repoNoCodeowner) Run(_ context.Context, s *model.Snapshot) []model.Findi
 
 		var title, why string
 		if !*r.CodeownersPresent {
-			title = fmt.Sprintf("Repository %s/%s has no CODEOWNERS file", s.Org.Login, r.Name)
+			title = fmt.Sprintf("Repository %s has no CODEOWNERS file", repoDisplay(s, r))
 			why = "There is no CODEOWNERS file, so no team is automatically requested to review changes and ownership of the code is undocumented."
 		} else {
-			title = fmt.Sprintf("Repository %s/%s has a CODEOWNERS file that names no team", s.Org.Login, r.Name)
+			title = fmt.Sprintf("Repository %s has a CODEOWNERS file that names no team", repoDisplay(s, r))
 			why = "The CODEOWNERS file assigns only individuals, so review ownership rests on people rather than a team and breaks when they leave."
 		}
 		out = append(out, model.Finding{
@@ -155,11 +165,11 @@ func (c repoNoCodeowner) Run(_ context.Context, s *model.Snapshot) []model.Findi
 			Title:       title,
 			Severity:    model.SevLow,
 			Axis:        model.AxisTeams,
-			Resource:    repoRef(s.Org.Login, r),
+			Resource:    repoResource(s, r),
 			Evidence:    map[string]any{"repo": r.Name, "codeowners_present": *r.CodeownersPresent, "teams": r.CodeownersTeams},
 			Description: why,
 			Remediation: "Add a CODEOWNERS file that assigns an owning team (e.g. \"* @" + s.Org.Login + "/your-team\") so reviews route to a group.",
-			DocsURL:     ownershipDocsURL,
+			DocsURL:     ownershipDocs(s),
 		})
 	}
 	return out

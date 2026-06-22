@@ -46,6 +46,10 @@ const (
 	DataCIRunners     DataKind = "ci_runners"
 	DataJobTokenScope DataKind = "repos.job_token_scope"
 
+	// GitLab merge-request approval rules & settings (Premium+); on Free this is
+	// recorded Missing so the approval check reports "not evaluated".
+	DataMRApprovalSettings DataKind = "repos.mr_approval_settings"
+
 	DataCommitAuthors DataKind = "repos.commit_authors"
 
 	DataBranchProtection         DataKind = "repos.branch_protection"

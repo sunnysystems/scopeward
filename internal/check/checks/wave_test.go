@@ -106,6 +106,9 @@ func TestRepoNoPushProtection(t *testing.T) {
 
 func TestWeakBranchProtection(t *testing.T) {
 	snap := model.NewSnapshot("acme")
+	// A team (>=2 members) so the "no required review" weakness is in scope; with
+	// fewer members reviewExpected suppresses it (you cannot approve your own change).
+	snap.Members = make([]model.Member, 2)
 	snap.Repos = []model.Repo{
 		{Name: "noreview", BranchReqPRReview: bptr(false), BranchAllowForcePush: bptr(false)}, // flag
 		{Name: "forcepush", BranchReqPRReview: bptr(true), BranchAllowForcePush: bptr(true)},  // flag
@@ -115,6 +118,16 @@ func TestWeakBranchProtection(t *testing.T) {
 	got := weakBranchProtection{}.Run(context.Background(), snap)
 	if len(got) != 2 {
 		t.Fatalf("want 2, got %d (%+v)", len(got), got)
+	}
+
+	// With a solo account, the review weakness is suppressed but force-push is not.
+	solo := model.NewSnapshot("acme")
+	solo.Solo = true
+	solo.Members = make([]model.Member, 2)
+	solo.Repos = snap.Repos
+	soloGot := weakBranchProtection{}.Run(context.Background(), solo)
+	if len(soloGot) != 1 {
+		t.Fatalf("--solo: want 1 (force-push only), got %d (%+v)", len(soloGot), soloGot)
 	}
 }
 
