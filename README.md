@@ -82,6 +82,7 @@ a terminal, you'll be prompted without echo. The token lives in memory only.
 ```sh
 scopeward                              # validate the token, show what it can audit
 scopeward --org my-org                 # audit an organization
+scopeward --org my-org --repo api      # audit a single repository (repeatable; globs ok)
 scopeward --me                         # audit your own account & repos (incl. private)
 scopeward --user some-login            # audit any user's public account
 scopeward tui --org my-org             # browse findings in an interactive TUI

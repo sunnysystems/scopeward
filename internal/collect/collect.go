@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,8 +36,9 @@ func (noopReporter) SetRepoProgress(int, int) {}
 
 // Options tunes how much collection does, to trade depth for speed/budget.
 type Options struct {
-	Quick    bool // skip the per-repo pass entirely (org-level checks only)
-	MaxRepos int  // cap how many repos the per-repo pass scans (0 = no cap)
+	Quick    bool     // skip the per-repo pass entirely (org-level checks only)
+	MaxRepos int      // cap how many repos the per-repo pass scans (0 = no cap)
+	Repos    []string // audit only repos matching one of these globs (empty = all)
 }
 
 // perRepoKinds are the DataKinds produced only by the per-repo pass; used to mark
@@ -82,6 +84,12 @@ func Run(ctx context.Context, client *ghclient.Client, org string, prog Reporter
 		collectNonHuman(ctx, client, org, snap)
 	}()
 	wg.Wait()
+
+	// A --repo filter that selects nothing is a typo (or the wrong org): fail
+	// loudly rather than render a clean audit of zero repositories.
+	if len(opts.Repos) > 0 && snap.Coverage.Available(model.DataRepos) && len(snap.Repos) == 0 {
+		return nil, fmt.Errorf("no repository in %q matched --repo %s", org, strings.Join(opts.Repos, ", "))
+	}
 
 	snap.CollectedAt = Now()
 	return snap, nil

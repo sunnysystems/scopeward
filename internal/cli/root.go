@@ -38,9 +38,10 @@ type options struct {
 	provider       string // github | gitlab (empty = auto-detect; default github)
 	host           string // self-managed instance base URL (e.g. https://gitlab.example.com)
 	org            string
-	me             bool   // audit the authenticated user's account/repos
-	user           string // audit a user's public account/repos
-	format         string // auto | text | json
+	repos          []string // audit only repos/projects matching these globs
+	me             bool     // audit the authenticated user's account/repos
+	user           string   // audit a user's public account/repos
+	format         string   // auto | text | json
 	noColor        bool
 	failOn         string   // none | low | medium | high | critical
 	htmlPath       string   // when set, also write a self-contained HTML report here
@@ -89,6 +90,7 @@ func Execute() int {
 	root.PersistentFlags().StringVar(&opts.provider, "provider", "", "forge to audit: github|gitlab (default github; gitlab when --host is a GitLab URL)")
 	root.PersistentFlags().StringVar(&opts.host, "host", "", "self-managed instance base URL, e.g. https://gitlab.example.com (default: the provider's SaaS host)")
 	root.PersistentFlags().StringVarP(&opts.org, "org", "o", "", "organization (GitHub) or top-level group (GitLab) to audit")
+	root.PersistentFlags().StringSliceVarP(&opts.repos, "repo", "r", nil, "audit only matching repositories/projects: a name, path, or glob (repeatable; needs --org, --me, or --user)")
 	root.PersistentFlags().BoolVar(&opts.me, "me", false, "audit your own account and repositories (includes private)")
 	root.PersistentFlags().StringVar(&opts.user, "user", "", "audit a user's public account and repositories")
 	root.PersistentFlags().StringVarP(&opts.format, "format", "f", "auto", "output format: auto|text|json|markdown|sarif")
@@ -158,6 +160,9 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 		return err
 	}
 	if err := validateTargetFlags(opts); err != nil {
+		return err
+	}
+	if err := validateRepoFlags(opts); err != nil {
 		return err
 	}
 

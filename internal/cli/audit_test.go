@@ -80,6 +80,27 @@ func TestValidateTargetFlags(t *testing.T) {
 	}
 }
 
+func TestValidateRepoFlags(t *testing.T) {
+	if err := validateRepoFlags(&options{repos: []string{"api"}}); err == nil {
+		t.Error("--repo without a target should error")
+	}
+	if err := validateRepoFlags(&options{org: "a", repos: []string{"api"}, quick: true}); err == nil {
+		t.Error("--repo with --quick should error")
+	}
+	if err := validateRepoFlags(&options{org: "a", repos: []string{"api["}}); err == nil {
+		t.Error("malformed glob should error")
+	}
+	if err := validateRepoFlags(&options{org: "a", repos: []string{"api-*"}}); err != nil {
+		t.Errorf("--org with --repo should be ok: %v", err)
+	}
+	if err := validateRepoFlags(&options{me: true, repos: []string{"api"}}); err != nil {
+		t.Errorf("--me with --repo should be ok: %v", err)
+	}
+	if err := validateRepoFlags(&options{quick: true}); err != nil {
+		t.Errorf("no --repo should be ok whatever else is set: %v", err)
+	}
+}
+
 func has(cs []check.Check, id string) bool {
 	for _, c := range cs {
 		if c.Meta().ID == id {

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/sunnysystems/scopeward/internal/collect"
@@ -66,6 +67,12 @@ func RunGroup(ctx context.Context, client *glclient.Client, group, host string, 
 	prog.Stage("collecting subgroups & projects")
 	collectTeamsAndProjects(ctx, client, group, snap, opts)
 
+	// A --repo filter that selects nothing is a typo (or the wrong group): fail
+	// loudly rather than render a clean audit of zero projects.
+	if len(opts.Repos) > 0 && snap.Coverage.Available(model.DataRepos) && len(snap.Repos) == 0 {
+		return nil, fmt.Errorf("no project in %q matched --repo %s", group, strings.Join(opts.Repos, ", "))
+	}
+
 	prog.Stage("collecting tokens, deploy keys & OAuth apps")
 	collectNonHuman(ctx, client, snap, opts)
 
@@ -95,6 +102,7 @@ func collectTeamsAndProjects(ctx context.Context, client *glclient.Client, group
 	}
 
 	collectProjects(ctx, client, group, snap)
+	applyRepoFilter(snap, opts)
 
 	if opts.Quick {
 		snap.Coverage.Missing(model.DataTeamMembers, "skipped in --quick mode (group-level only)")
@@ -103,6 +111,21 @@ func collectTeamsAndProjects(ctx context.Context, client *glclient.Client, group
 	}
 	collectSubgroupMembers(ctx, client, snap)
 	collectProjectMembers(ctx, client, snap)
+}
+
+// applyRepoFilter narrows the collected projects to those matching --repo, so
+// every later per-project pass (members, tokens, CI/CD, branches) sees only the
+// selected projects. Coverage is downgraded to partial so the report never
+// reads as a full-group scan. Team repo-grants keep referencing the whole
+// group, mirroring the GitHub collector.
+func applyRepoFilter(snap *model.Snapshot, opts collect.Options) {
+	if len(opts.Repos) == 0 || !snap.Coverage.Available(model.DataRepos) {
+		return
+	}
+	total := len(snap.Repos)
+	snap.Repos = collect.FilterRepos(snap.Repos, opts.Repos)
+	snap.Coverage.Partial(model.DataRepos, len(snap.Repos),
+		fmt.Sprintf("filtered to %d of %d projects (--repo)", len(snap.Repos), total))
 }
 
 // collectGroup reads group-level settings, notably the 2FA-enforcement flag that
