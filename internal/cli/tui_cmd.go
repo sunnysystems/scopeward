@@ -25,6 +25,9 @@ func newTUICommand(opts *options) *cobra.Command {
 			if err := validateTargetFlags(opts); err != nil {
 				return err
 			}
+			if err := validateRepoFlags(opts); err != nil {
+				return err
+			}
 			if !term.IsInteractive() {
 				return errors.New("the tui requires an interactive terminal; use the default command for headless output")
 			}

@@ -32,8 +32,8 @@ func collectTeamsAndPermissions(ctx context.Context, client *ghclient.Client, or
 		snap.Coverage.Missing(model.DataRepoDirectCollaborators, "repositories could not be listed")
 		return
 	}
-	snap.Repos = repos
-	snap.Coverage.OK(model.DataRepos, len(repos))
+	snap.Repos = FilterRepos(repos, opts.Repos)
+	recordRepoListCoverage(snap, opts, len(repos))
 
 	if rulesets, err := fetchOrgRulesets(ctx, client, org); err != nil {
 		snap.Coverage.Missing(model.DataOrgRulesets, reasonFor(err, "listing org rulesets"))

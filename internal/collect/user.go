@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/sunnysystems/scopeward/internal/ghclient"
 	"github.com/sunnysystems/scopeward/internal/model"
@@ -37,8 +38,11 @@ func RunUser(ctx context.Context, client *ghclient.Client, login string, self bo
 	if err != nil {
 		return nil, fmt.Errorf("cannot read repositories for %q: %w", login, err)
 	}
-	snap.Repos = repos
-	snap.Coverage.OK(model.DataRepos, len(repos))
+	snap.Repos = FilterRepos(repos, opts.Repos)
+	if len(opts.Repos) > 0 && len(snap.Repos) == 0 {
+		return nil, fmt.Errorf("no repository of %q matched --repo %s", login, strings.Join(opts.Repos, ", "))
+	}
+	recordRepoListCoverage(snap, opts, len(repos))
 
 	if opts.Quick {
 		for _, k := range perRepoKinds {

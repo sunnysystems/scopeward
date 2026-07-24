@@ -83,6 +83,22 @@ func validateTargetFlags(o *options) error {
 	return nil
 }
 
+// validateRepoFlags checks --repo usage: it needs a target whose repos it can
+// filter, it contradicts --quick (which skips the per-repo scan), and every
+// pattern must be a valid glob.
+func validateRepoFlags(o *options) error {
+	if len(o.repos) == 0 {
+		return nil
+	}
+	if o.org == "" && !o.me && o.user == "" {
+		return errors.New("--repo requires a target: --org, --me, or --user")
+	}
+	if o.quick {
+		return errors.New("--repo needs the per-repo scan that --quick skips; use one or the other")
+	}
+	return collect.ValidateRepoPatterns(o.repos)
+}
+
 // target resolves the audit subject and mode. probeLogin supplies --me's login.
 func (o *options) target(probeLogin string) (subject string, userMode, self bool) {
 	switch {
@@ -99,7 +115,7 @@ func (o *options) target(probeLogin string) (subject string, userMode, self bool
 // collector, runs the mode-appropriate checks, and scores them. Ignore/baseline
 // filtering is applied by the caller.
 func buildAudit(ctx context.Context, coll provider.Collector, subject string, userMode, self bool, opts *options, prog collect.Reporter) (report.Audit, error) {
-	co := collect.Options{Quick: opts.quick, MaxRepos: opts.maxRepos}
+	co := collect.Options{Quick: opts.quick, MaxRepos: opts.maxRepos, Repos: opts.repos}
 
 	snap, err := coll.Collect(ctx, provider.Args{
 		Subject:  subject,
