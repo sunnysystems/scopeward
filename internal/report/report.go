@@ -23,6 +23,13 @@ type Audit struct {
 	// config buys is always visible next to the number it moved.
 	UnsuppressedScore score.Score
 
+	// TokenScopes are the scopes the audit's own token was granted, used to
+	// preflight the fix script. TokenScopesUnknown marks a credential whose scopes
+	// cannot be enumerated (a fine-grained PAT, a GitHub App token), where an empty
+	// TokenScopes means "not knowable", never "none".
+	TokenScopes        []string
+	TokenScopesUnknown bool
+
 	// Baseline comparison (set when --baseline is used).
 	HasBaseline   bool
 	NewKeys       map[string]bool // FindingKey of findings absent from the baseline

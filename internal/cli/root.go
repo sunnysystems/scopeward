@@ -254,6 +254,9 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 	if err != nil {
 		return err
 	}
+	// Carried from the preflight so --fix-script can say which scopes the emitted
+	// commands need and which of them this token is missing.
+	audit.TokenScopes, audit.TokenScopesUnknown = pf.Scopes, pf.ScopesUnknown
 
 	if ignoreCfg != nil {
 		// Score the unfiltered set first: the delta between it and the final score
