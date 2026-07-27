@@ -204,6 +204,15 @@ keeps the owner break-glass path, reports it as an `info` (zero penalty) so the
 exposure stays visible, and tells you to revisit it as the team grows — rather
 than recommending a lockout and then flagging you for the workaround.
 
+Protection quality is assessed for **both** mechanisms — classic branch
+protection and rulesets — by reading each branch's effective rules, so a
+deliberately weak ruleset no longer reads the same as a strong one. Remediation
+follows the mechanism: for a ruleset-protected branch scopeward points at the
+ruleset rather than suggesting classic protection, which would stack a second
+mechanism beside the weak rule instead of fixing it. A ruleset's bypass actors
+are not exposed with its rules, so admin bypass on those repos is reported as
+explicitly *not assessed* rather than passing silently.
+
 Above the threshold, an admin bypass becomes a `medium` finding
 (`teams.branch-protection-bypassable`). If you keep one deliberately, accept it
 in `.scopeward.yml` with a `reason` — it will then be reported under

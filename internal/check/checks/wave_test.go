@@ -133,6 +133,84 @@ func TestWeakBranchProtection(t *testing.T) {
 	}
 }
 
+// A weak ruleset must be reported like a weak classic config — that is the point
+// of #34 — but remediated differently. Suggesting the classic-protection PUT here
+// would leave the weak rule in place and stack a second mechanism beside it.
+func TestWeakBranchProtection_RulesetRemediation(t *testing.T) {
+	snap := model.NewSnapshot("acme")
+	snap.Members = make([]model.Member, 2)
+	snap.Repos = []model.Repo{
+		{Name: "by-ruleset", BranchReqPRReview: bptr(false), BranchAllowForcePush: bptr(true),
+			BranchProtectionSource: model.BranchProtectionRuleset},
+		{Name: "by-classic", BranchReqPRReview: bptr(false), BranchAllowForcePush: bptr(true),
+			BranchProtectionSource: model.BranchProtectionClassic},
+	}
+	got := weakBranchProtection{}.Run(context.Background(), snap)
+	if len(got) != 2 {
+		t.Fatalf("want both repos flagged, got %d", len(got))
+	}
+
+	byRepo := map[string]model.Finding{}
+	for _, f := range got {
+		byRepo[f.Evidence["repo"].(string)] = f
+	}
+	ruleset, classic := byRepo["by-ruleset"], byRepo["by-classic"]
+
+	if ruleset.GHFix != "" {
+		t.Errorf("ruleset repo got a classic-protection command: %q", ruleset.GHFix)
+	}
+	if !strings.Contains(ruleset.Remediation, "ruleset") {
+		t.Errorf("ruleset remediation does not mention the ruleset: %q", ruleset.Remediation)
+	}
+	if !strings.Contains(ruleset.DocsURL, "rulesets") {
+		t.Errorf("ruleset docs URL = %q, want the rulesets page", ruleset.DocsURL)
+	}
+	// The classic repo is unaffected: same severity, and it keeps its command.
+	if classic.GHFix == "" {
+		t.Error("classic repo lost its suggested fix")
+	}
+	if ruleset.Severity != classic.Severity {
+		t.Errorf("severities differ (%v vs %v): a weak ruleset is as weak as weak classic protection",
+			ruleset.Severity, classic.Severity)
+	}
+}
+
+// Ruleset-protected repos are assessed for protection quality but not for admin
+// bypass: bypass actors live on the ruleset object, not in the effective rules.
+// Silence there would read as "admins are bound", which is the exact failure #34
+// is about, so the gap is stated explicitly at info.
+func TestBypassableBranchProtection_RulesetGapIsStated(t *testing.T) {
+	snap := bypassSnapshot(20)
+	snap.Repos = append(snap.Repos, model.Repo{
+		Name: "by-ruleset", BranchReqPRReview: bptr(true), BranchAllowForcePush: bptr(false),
+		BranchEnforceAdmins: nil, BranchProtectionSource: model.BranchProtectionRuleset,
+	})
+
+	var note model.Finding
+	for _, f := range (bypassableBranchProtection{}).Run(context.Background(), snap) {
+		if strings.Contains(f.Title, "not assessed") {
+			note = f
+		}
+	}
+	if note.CheckID == "" {
+		t.Fatal("the unassessed admin bypass on a ruleset-protected repo is not surfaced")
+	}
+	if note.Severity != model.SevInfo {
+		t.Errorf("severity = %v, want info: this states a gap, it does not assert a defect", note.Severity)
+	}
+	if repos, _ := note.Evidence["repos"].([]string); len(repos) != 1 || repos[0] != "by-ruleset" {
+		t.Errorf("evidence names %v, want [by-ruleset]", note.Evidence["repos"])
+	}
+
+	// Repos assessed through classic protection are never reported as unassessed,
+	// whether the setting is on ("enforced") or off ("bypassable").
+	for _, f := range (bypassableBranchProtection{}).Run(context.Background(), bypassSnapshot(20)) {
+		if strings.Contains(f.Title, "not assessed") {
+			t.Errorf("classic-protected repos reported as unassessed: %q", f.Title)
+		}
+	}
+}
+
 func bypassSnapshot(members int) *model.Snapshot {
 	snap := model.NewSnapshot("acme")
 	snap.Members = make([]model.Member, members)

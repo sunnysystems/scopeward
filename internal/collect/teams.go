@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -198,10 +199,17 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 			r.DefaultBranchProtected = p
 			protection.add(1)
 			if *p {
-				// Only protected branches have classic-protection detail worth fetching.
-				if d, derr := fetchBranchProtectionDetail(ctx, client, org, r.Name, r.DefaultBranch); derr == nil && d != nil {
+				// Only protected branches have detail worth fetching. Classic protection
+				// first; a nil result means the branch is guarded by a ruleset instead,
+				// which the classic endpoint cannot see, so read the effective rules.
+				d, derr := fetchBranchProtectionDetail(ctx, client, org, r.Name, r.DefaultBranch)
+				if derr == nil && d == nil {
+					d, derr = fetchBranchRules(ctx, client, org, r.Name, r.DefaultBranch)
+				}
+				if derr == nil && d != nil {
 					r.BranchReqPRReview, r.BranchAllowForcePush = d.reqPR, d.allowForce
 					r.BranchReqStatusChecks, r.BranchEnforceAdmins = d.reqChecks, d.enforceAdmins
+					r.BranchProtectionSource = d.source
 				}
 			}
 		}
@@ -459,14 +467,16 @@ func fetchDefaultBranchProtected(ctx context.Context, client *ghclient.Client, o
 	return &dto.Protected, nil
 }
 
-// branchProtectionDetail is the classic protection detail for one branch. Every
-// field is a pointer so "not assessed" stays distinguishable from "off"; a nil
-// *branchProtectionDetail means the branch has no classic protection to read.
+// branchProtectionDetail is the protection detail for one branch, from either
+// mechanism GitHub offers. Every field is a pointer so "not assessed" stays
+// distinguishable from "off"; a nil *branchProtectionDetail means neither
+// mechanism had anything to say about the branch.
 type branchProtectionDetail struct {
 	reqPR         *bool
 	allowForce    *bool
 	reqChecks     *bool
 	enforceAdmins *bool
+	source        string // model.BranchProtectionClassic | model.BranchProtectionRuleset
 }
 
 // fetchBranchProtectionDetail reads the classic branch-protection settings for a
@@ -497,13 +507,83 @@ func fetchBranchProtectionDetail(ctx context.Context, client *ghclient.Client, o
 	pr := dto.RequiredPullRequestReviews != nil && dto.RequiredPullRequestReviews.RequiredApprovingReviewCount > 0
 	force := dto.AllowForcePushes != nil && dto.AllowForcePushes.Enabled
 	checks := dto.RequiredStatusChecks != nil
-	d := &branchProtectionDetail{reqPR: &pr, allowForce: &force, reqChecks: &checks}
+	d := &branchProtectionDetail{reqPR: &pr, allowForce: &force, reqChecks: &checks, source: model.BranchProtectionClassic}
 	// Absent enforce_admins is left unknown rather than assumed off, so a shape we
 	// did not anticipate degrades to "not evaluated" instead of a false finding.
 	if dto.EnforceAdmins != nil {
 		d.enforceAdmins = &dto.EnforceAdmins.Enabled
 	}
 	return d, nil
+}
+
+// fetchBranchRules reads the *effective* rules for a branch: the merged result
+// of every repository- and organization-level ruleset that applies to it.
+//
+// This is the path by which ruleset-protected branches get assessed at all.
+// Listing org rulesets needs a plan that exposes them and otherwise degrades to
+// "not available", and the classic protection endpoint 404s for a branch guarded
+// only by a ruleset — so before this, such repos were checked for *whether*
+// protection existed and never for whether it was any good. A deliberately weak
+// ruleset read exactly like a strong one.
+//
+// The rules map onto the same neutral fields classic protection fills, so the
+// checks never need to know which mechanism produced them:
+//
+//	pull_request with required_approving_review_count >= 1 → review required
+//	non_fast_forward present                               → force-push blocked
+//	required_status_checks present                         → status checks required
+//
+// Bypass actors are deliberately not read here: they live on the ruleset object,
+// one extra call per distinct ruleset, so enforceAdmins stays nil and the
+// admin-bypass check reports ruleset-protected repos as not assessed rather than
+// guessing. An empty rule list means no ruleset covers the branch.
+func fetchBranchRules(ctx context.Context, client *ghclient.Client, org, repo, branch string) (*branchProtectionDetail, error) {
+	path := "/repos/" + org + "/" + repo + "/rules/branches/" + url.PathEscape(branch)
+	rules, err := ghclient.GetAll[branchRule](ctx, client, path, nil)
+	if err != nil {
+		if ghclient.StatusCode(err) == 404 {
+			return nil, nil // no such branch, or rulesets unavailable here
+		}
+		return nil, err
+	}
+	return rulesToProtection(rules), nil
+}
+
+// branchRule is one effective rule as the rulesets API reports it.
+type branchRule struct {
+	Type       string `json:"type"`
+	Parameters struct {
+		RequiredApprovingReviewCount int `json:"required_approving_review_count"`
+	} `json:"parameters"`
+}
+
+// rulesToProtection maps effective ruleset rules onto the neutral protection
+// fields the checks consume. Pure (no I/O) so it can be unit-tested directly.
+// Returns nil when no rule covers the branch, which reads as "not assessed"
+// rather than as an all-clear.
+func rulesToProtection(rules []branchRule) *branchProtectionDetail {
+	if len(rules) == 0 {
+		return nil
+	}
+	var pr, checks, blocksForce bool
+	for _, r := range rules {
+		switch r.Type {
+		case "pull_request":
+			// A pull_request rule with zero required approvals routes merges through a
+			// PR but does not require anyone to look at it — the same state classic
+			// protection reports as "no required review".
+			pr = pr || r.Parameters.RequiredApprovingReviewCount > 0
+		case "required_status_checks":
+			checks = true
+		case "non_fast_forward":
+			blocksForce = true
+		}
+	}
+	force := !blocksForce
+	return &branchProtectionDetail{
+		reqPR: &pr, allowForce: &force, reqChecks: &checks,
+		source: model.BranchProtectionRuleset,
+	}
 }
 
 // fetchOrgRulesets lists the organization's repository rulesets.

@@ -3,6 +3,7 @@ package checks
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/sunnysystems/scopeward/internal/check"
@@ -15,10 +16,10 @@ func init() {
 }
 
 // weakBranchProtection flags default branches that are protected but weakly: no
-// required pull-request review, or force-pushes allowed. (Repos protected via a
-// ruleset rather than classic branch protection are not assessed here — their
-// detail is not exposed by the classic endpoint — and unprotected branches are
-// covered by teams.unprotected-default-branch.)
+// required pull-request review, or force-pushes allowed. Both mechanisms are
+// assessed — classic branch protection and rulesets — since the collector maps
+// each onto the same neutral fields. Unprotected branches are covered by
+// teams.unprotected-default-branch.
 type weakBranchProtection struct{}
 
 func (weakBranchProtection) Meta() check.CheckMeta {
@@ -53,22 +54,33 @@ func (c weakBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.
 		}
 		docs := "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches"
 		remediation := "Require at least one approving pull-request review and disable force-pushes on the default branch (also consider requiring status checks and signed commits)."
-		if gitlab {
+		byRuleset := r.BranchProtectionSource == model.BranchProtectionRuleset
+		switch {
+		case gitlab:
 			docs = glBranchDocs
 			remediation = "Require merge-request approvals (Premium) and disable force-push on the protected branch; protection takes effect when the relevant branches are themselves protected."
+		case byRuleset:
+			// The weakness is in a ruleset, so it is fixed by editing that ruleset.
+			// Adding classic branch protection instead would leave the weak rule in
+			// place and stack a second, independent mechanism beside it.
+			docs = "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
+			remediation = "Edit the ruleset covering this branch (repository or organization level): add a pull-request rule requiring at least one approving review, and a \"block force pushes\" (non-fast-forward) rule. Do not add classic branch protection on top — that stacks a second mechanism beside the weak rule instead of fixing it."
 		}
 		f := model.Finding{
-			CheckID:     c.Meta().ID,
-			Title:       "Weak protection on " + repoDisplay(s, r) + " (" + strings.Join(weaknesses, ", ") + ")",
-			Severity:    model.SevHigh,
-			Axis:        model.AxisTeams,
-			Resource:    repoResource(s, r),
-			Evidence:    map[string]any{"repo": r.Name, "default_branch": r.DefaultBranch, "weaknesses": weaknesses},
+			CheckID:  c.Meta().ID,
+			Title:    "Weak protection on " + repoDisplay(s, r) + " (" + strings.Join(weaknesses, ", ") + ")",
+			Severity: model.SevHigh,
+			Axis:     model.AxisTeams,
+			Resource: repoResource(s, r),
+			Evidence: map[string]any{
+				"repo": r.Name, "default_branch": r.DefaultBranch,
+				"weaknesses": weaknesses, "protection_source": r.BranchProtectionSource,
+			},
 			Description: "The default branch is protected, but the protection has gaps: changes can land without review, or history can be rewritten with a force-push. Either undermines the guarantee that what is on main was reviewed and is immutable.",
 			Remediation: remediation,
 			DocsURL:     docs,
 		}
-		if !gitlab && branchProtectable(r.Private, s.Org.Plan) {
+		if !gitlab && !byRuleset && branchProtectable(r.Private, s.Org.Plan) {
 			f = withFix(f, ghProtectBranch(s.Org.Login, r.Name, r.DefaultBranch, reviewExpected(s), !adminBypassExpected(s)))
 		}
 		out = append(out, f)
@@ -119,11 +131,19 @@ func (c bypassableBranchProtection) Run(_ context.Context, s *model.Snapshot) []
 	}
 
 	var out []model.Finding
+	var unassessed []string
 	for _, r := range activeRepos(s) {
 		// nil = not assessed: no classic protection, ruleset-protected, or a
 		// provider that does not expose the setting. Only an explicit false is a
 		// finding.
 		if r.BranchEnforceAdmins == nil || *r.BranchEnforceAdmins {
+			// Ruleset-protected repos are assessed for protection quality but not for
+			// admin bypass: bypass actors live on the ruleset object rather than in the
+			// effective rules. Collect them so the gap is stated instead of reading as
+			// a pass — a silent omission here is the failure mode of #34.
+			if r.BranchEnforceAdmins == nil && r.BranchProtectionSource == model.BranchProtectionRuleset {
+				unassessed = append(unassessed, r.Name)
+			}
 			continue
 		}
 		f := model.Finding{
@@ -143,6 +163,29 @@ func (c bypassableBranchProtection) Run(_ context.Context, s *model.Snapshot) []
 			f = withFix(f, ghEnforceAdmins(s.Org.Login, r.Name, r.DefaultBranch))
 		}
 		out = append(out, f)
+	}
+
+	// An explicit "not assessed" beats silence: a reader who sees no bypass finding
+	// on a ruleset-protected repo would otherwise conclude admins are bound by the
+	// rules, which this check has no way to confirm.
+	if len(unassessed) > 0 {
+		sort.Strings(unassessed)
+		noun := "repositories"
+		if len(unassessed) == 1 {
+			noun = "repository"
+		}
+		out = append(out, model.Finding{
+			CheckID:  c.Meta().ID,
+			Title:    fmt.Sprintf("Admin bypass not assessed on %d %s protected by rulesets", len(unassessed), noun),
+			Severity: model.SevInfo,
+			Axis:     model.AxisTeams,
+			Resource: orgRef(s.Org),
+			Evidence: map[string]any{"repos": unassessed, "reason": "bypass actors are not exposed by the effective-rules endpoint"},
+			Description: "Protection quality on these repositories was assessed from their effective ruleset rules, but whether administrators can bypass those rules was not: a ruleset's bypass actors live on the ruleset itself rather than being reported with the rules that apply to a branch. " +
+				"They are listed so a clean bypass result is not read as covering them.",
+			Remediation: "Review the bypass list on the ruleset covering these branches (Settings > Rules). An empty bypass list is the ruleset equivalent of enforce_admins on classic protection.",
+			DocsURL:     "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets",
+		})
 	}
 	return out
 }
