@@ -126,7 +126,7 @@ func (c bypassableBranchProtection) Run(_ context.Context, s *model.Snapshot) []
 	if expected {
 		title = " keeps an admin break-glass path"
 		sev = model.SevInfo
-		desc = fmt.Sprintf("The default branch is protected, but not for administrators: owners and repo admins can push directly. At %d member(s) that is the configuration scopeward suggests — with a required review and no admin bypass, one person being unavailable would block every change, including an urgent fix. Listed so the exposure is visible, not because it needs fixing today: anyone with admin, and any bot or agent holding an admin token, is outside the protection.", len(s.Members))
+		desc = fmt.Sprintf("The default branch is protected, but not for administrators: owners and repo admins can push directly. At %d member(s) — below the %d this tool treats as enough of a bench — that is the configuration scopeward itself suggests, because a required review plus no admin bypass would leave one person's absence blocking every change, including an urgent fix. Listed so the exposure is visible, not because it needs fixing today: anyone with admin, and any bot or agent holding an admin token, is outside the protection.", len(s.Members), breakGlassThreshold)
 		fix = fmt.Sprintf("Nothing to do while the team is this small. Revisit once there are %d or more members and a reviewer is reliably reachable: enable \"Do not allow bypassing the above settings\" (enforce_admins) then. In the meantime, keep the number of admins small, since admin is what the bypass is keyed to.", breakGlassThreshold)
 	}
 

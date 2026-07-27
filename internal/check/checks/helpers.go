@@ -137,8 +137,15 @@ const breakGlassThreshold = 5
 // fires when the bypass exists; a larger org that wants a break-glass path
 // accepts that one finding in .scopeward.yml, where the reason is now recorded
 // and reported. Both directions are covered without another flag to learn.
+//
+// Member count only, deliberately not --solo. That flag means "do not suggest a
+// fix requiring a second approver", which is about the suggested command; letting
+// it also decide a finding's severity would let a flag silently move the score,
+// which is the invisible-discount problem ignore rules were made visible to
+// avoid. A genuine single-developer account has fewer members than the threshold
+// anyway, so the honest signal already covers the case the flag was named for.
 func adminBypassExpected(s *model.Snapshot) bool {
-	return s.Solo || len(s.Members) < breakGlassThreshold
+	return len(s.Members) < breakGlassThreshold
 }
 
 // withFix sets a finding's suggested-fix command and its verification command
