@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/glamour"
@@ -218,9 +219,19 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 		return nil
 	}
 
-	ignoreCfg, _, err := loadIgnore(opts.configPath)
+	ignoreCfg, ignorePath, err := loadIgnore(opts.configPath)
 	if err != nil {
 		return err
+	}
+	if ignoreCfg != nil {
+		// Warn, never fail: a rule naming a check that no longer exists suppresses
+		// nothing while looking like it does, so the operator should hear about it
+		// before reading a report that silently stopped honouring their acceptance.
+		if unknown := ignoreCfg.unknownChecks(); len(unknown) > 0 {
+			fmt.Fprintln(out, ui.WarnTag.Render("⚠ "+ignorePath+": no such check: "+strings.Join(unknown, ", ")))
+			fmt.Fprintln(out, ui.Subtle.Render("  These rules suppress nothing. Run with --format json to see the current check IDs."))
+			fmt.Fprintln(out)
+		}
 	}
 
 	var baselineKeys map[string]bool

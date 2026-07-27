@@ -66,10 +66,10 @@ func TestProviderNeutralChecksRunOnGitLabSnapshot(t *testing.T) {
 		skipped[s.CheckID] = true
 	}
 	// A representative GitHub-only check must be skipped, never a false pass.
-	if !skipped["nonhuman.app-broad-permissions"] {
-		t.Error("GitHub-only check nonhuman.app-broad-permissions should be skipped on a GitLab snapshot, not evaluated as clean")
+	if !skipped["nonhuman.app-dangerous-permissions"] {
+		t.Error("GitHub-only check nonhuman.app-dangerous-permissions should be skipped on a GitLab snapshot, not evaluated as clean")
 	}
-	if found["nonhuman.app-broad-permissions"] {
+	if found["nonhuman.app-dangerous-permissions"] {
 		t.Error("GitHub-only check must not produce findings on a GitLab snapshot")
 	}
 }
