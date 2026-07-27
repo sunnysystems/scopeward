@@ -157,8 +157,13 @@ type Repo struct {
 	// administrators. false means every org owner and repo admin can push straight
 	// to the protected branch, so the protection is bypassable by exactly the
 	// identities that most need it.
-	BranchEnforceAdmins *bool           `json:"branch_enforce_admins,omitempty"`
-	WorkflowIssues      []WorkflowIssue `json:"workflow_issues,omitempty"`
+	BranchEnforceAdmins *bool `json:"branch_enforce_admins,omitempty"`
+	// BranchProtectionSource records which mechanism the assessed rules came from.
+	// Empty = not assessed. It matters for remediation: a ruleset is edited at
+	// repository or organization level, and applying classic branch protection on
+	// top of one adds a second, parallel mechanism rather than fixing the weak rule.
+	BranchProtectionSource string          `json:"branch_protection_source,omitempty"`
+	WorkflowIssues         []WorkflowIssue `json:"workflow_issues,omitempty"`
 	// Ownership signals. Properties holds this repo's org custom-property values
 	// (lowercased keys). CodeownersPresent is nil when not assessed; CodeownersTeams
 	// are the team references (@org/team) found in the CODEOWNERS file.
@@ -190,6 +195,14 @@ type DependabotAlertSummary struct {
 
 // Total is the count of open alerts across all severities.
 func (d DependabotAlertSummary) Total() int { return d.Critical + d.High + d.Medium + d.Low }
+
+// The mechanisms that can guard a branch. GitHub is steadily moving orgs from
+// classic branch protection to rulesets, so an assessment that only understood
+// the classic endpoint would go blind as that migration proceeds.
+const (
+	BranchProtectionClassic = "classic"
+	BranchProtectionRuleset = "ruleset"
+)
 
 // WorkflowIssue is a supply-chain concern found in a repo's Actions workflow.
 type WorkflowIssue struct {
