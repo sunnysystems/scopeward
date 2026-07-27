@@ -138,6 +138,13 @@ The report leads with the aggregate rather than burying it under one 2-point
 `--fix-script` emits the `gh` archive commands (reversible; archiving makes a
 repo read-only, it does not delete anything).
 
+Archived repositories are skipped by the per-repo checks — nothing can be pushed
+to a read-only repo, so its branch protection and grants are moot — with one
+exception: they are still scanned for **leaked secrets**. Archiving does not
+un-leak a credential already in the history, and a retired repository is exactly
+where nobody looks. Those get their own `--max-repos` budget, so a graveyard of
+archived repos never eats the cap meant for the active ones.
+
 ## Suppressing findings
 
 Drop a `.scopeward.yml` in your repo (auto-detected, or point at it with

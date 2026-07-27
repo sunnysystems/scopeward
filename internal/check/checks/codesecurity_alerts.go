@@ -34,24 +34,33 @@ func (c openSecretAlerts) Run(_ context.Context, s *model.Snapshot) []model.Find
 	// and still valid. This is the one axis where archiving must not resolve the
 	// finding, or the tool would teach archiving as a way to clear leaked secrets.
 	//
-	// The GitHub collector does not yet fetch alerts for archived repos, so in a
-	// live run this still reports nothing for them; the check is nonetheless
-	// correct for any snapshot that carries the data (a cached snapshot taken
-	// before the repo was archived, or another provider's collector).
+	// The collector runs a narrow extra pass over archived repos for exactly this
+	// signal, so the exemption is real rather than theoretical.
 	for _, r := range s.Repos {
 		if r.OpenSecretAlerts == nil || *r.OpenSecretAlerts == 0 {
 			continue
 		}
 		n := *r.OpenSecretAlerts
+		title := fmt.Sprintf("%s/%s has %d open secret-scanning alert(s)", s.Org.Login, r.Name, n)
+		desc := "Secret scanning has found credentials committed to this repository that are still unresolved. A committed secret must be assumed compromised: anyone with read access (and anyone the history later reaches) can use it."
+		fix := "Rotate the exposed credentials now, then resolve the alerts. Removing the commit is not enough; the secret was already exposed and must be invalidated."
+		if r.Archived {
+			// The usual repo-level advice does not apply: the repo is already
+			// read-only and already archived, and the finding is about a credential
+			// that lives outside it.
+			title = fmt.Sprintf("Archived %s/%s still has %d open secret-scanning alert(s)", s.Org.Login, r.Name, n)
+			desc = "Secret scanning found credentials committed to this repository, and archiving it did not resolve them. An archived repo is read-only, which stops new commits; it does nothing to a credential that is already in the history and still valid. These are the easiest exposures to forget, because nobody reviews a repository that was retired."
+			fix = "Rotate these credentials. The repository being archived is not a mitigation — the secret is live wherever it is used, and revoking it there is the only fix. Deleting the repository would hide the alert without invalidating anything."
+		}
 		out = append(out, model.Finding{
 			CheckID:     c.Meta().ID,
-			Title:       fmt.Sprintf("%s/%s has %d open secret-scanning alert(s)", s.Org.Login, r.Name, n),
+			Title:       title,
 			Severity:    model.SevHigh,
 			Axis:        model.AxisCodeSecurity,
 			Resource:    repoRef(s.Org.Login, r),
-			Evidence:    map[string]any{"repo": r.Name, "open_alerts": n},
-			Description: "Secret scanning has found credentials committed to this repository that are still unresolved. A committed secret must be assumed compromised: anyone with read access (and anyone the history later reaches) can use it.",
-			Remediation: "Rotate the exposed credentials now, then resolve the alerts. Removing the commit is not enough; the secret was already exposed and must be invalidated.",
+			Evidence:    map[string]any{"repo": r.Name, "open_alerts": n, "archived": r.Archived},
+			Description: desc,
+			Remediation: fix,
 			DocsURL:     "https://docs.github.com/code-security/secret-scanning/managing-alerts-from-secret-scanning",
 		})
 	}

@@ -265,13 +265,23 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 		}
 	})
 
+	// Archived repos are excluded from the pass above because they are read-only:
+	// protection, grants and workflow findings are moot on a repo nobody can push
+	// to. A committed credential is not moot — archiving does not un-leak it, and
+	// an archived repo is precisely where nobody is looking. Scan those for that
+	// one signal, so the recommendation to archive dead repos never quietly
+	// retires the class of finding that outlives archiving.
+	archived := collectArchivedSecrets(ctx, client, org, snap, prog, opts, &security, &alerts)
+
 	grants.record(snap.Coverage, model.DataRepoDirectCollaborators, attempted)
 	keys.record(snap.Coverage, model.DataDeployKeys, attempted)
 	hooks.record(snap.Coverage, model.DataRepoWebhooks, attempted)
 	commits.record(snap.Coverage, model.DataCommitAuthors, attempted)
 	protection.record(snap.Coverage, model.DataBranchProtection, attempted)
-	security.record(snap.Coverage, model.DataRepoSecurity, attempted)
-	alerts.record(snap.Coverage, model.DataOpenSecretAlerts, attempted)
+	// These two kinds cover archived repos as well, so their denominator is larger
+	// than the active-repo count the other nine are judged against.
+	security.record(snap.Coverage, model.DataRepoSecurity, attempted+archived)
+	alerts.record(snap.Coverage, model.DataOpenSecretAlerts, attempted+archived)
 	dependabot.record(snap.Coverage, model.DataDependabotEnabled, attempted)
 	depAlerts.record(snap.Coverage, model.DataOpenDependabotAlerts, attempted)
 	workflows.record(snap.Coverage, model.DataWorkflows, attempted)
@@ -514,6 +524,59 @@ func fetchBranchProtectionDetail(ctx context.Context, client *ghclient.Client, o
 		d.enforceAdmins = &dto.EnforceAdmins.Enabled
 	}
 	return d, nil
+}
+
+// collectArchivedSecrets fills secret-scanning state and open-alert counts for
+// archived repositories, and reports how many it attempted so the coverage
+// denominators for those two kinds can account for them.
+//
+// It is a separate, deliberately narrow pass rather than folding archived repos
+// into the main one. Two calls per repo against that pass's eleven, and they get
+// their own --max-repos budget: a graveyard of archived repositories must never
+// consume the cap meant for the ones people still push to.
+//
+// The other detail fields stay nil for these repos on purpose. The checks guard
+// on activeRepos, so populating secret state here does not wake up the ~20 checks
+// that are moot on a read-only repo.
+func collectArchivedSecrets(ctx context.Context, client *ghclient.Client, org string, snap *model.Snapshot, prog Reporter, opts Options, security, alerts *covTally) int {
+	var targets []int
+	for i := range snap.Repos {
+		if snap.Repos[i].Archived {
+			targets = append(targets, i)
+		}
+	}
+	if len(targets) == 0 {
+		return 0
+	}
+	sort.Slice(targets, func(a, b int) bool { return snap.Repos[targets[a]].Name < snap.Repos[targets[b]].Name })
+	if opts.MaxRepos > 0 && len(targets) > opts.MaxRepos {
+		targets = targets[:opts.MaxRepos]
+	}
+
+	prog.Stage(fmt.Sprintf("scanning %d archived repositories for leaked secrets", len(targets)))
+	forEachIndex(ctx, defaultConcurrency, len(targets), func(ctx context.Context, t int) {
+		r := &snap.Repos[targets[t]]
+
+		ss, pp, err := fetchRepoSecurity(ctx, client, org, r.Name)
+		if err != nil {
+			security.fail(reasonFor(err, "reading code security settings"))
+			return
+		}
+		r.SecretScanning, r.PushProtection = ss, pp
+		security.add(1)
+
+		// Alerts only exist where scanning is on; skip the guaranteed 404 otherwise.
+		if ss == nil || !*ss {
+			return
+		}
+		if n, aerr := fetchOpenSecretAlerts(ctx, client, org, r.Name); aerr != nil {
+			alerts.fail(reasonFor(aerr, "counting open secret-scanning alerts"))
+		} else if n != nil {
+			r.OpenSecretAlerts = n
+			alerts.add(1)
+		}
+	})
+	return len(targets)
 }
 
 // fetchBranchRules reads the *effective* rules for a branch: the merged result
