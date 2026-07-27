@@ -19,7 +19,7 @@ One command. Zero config. Nothing hosted. Built by [Sunny Systems](https://githu
 ---
 
 `scopeward` connects to GitHub with a **read-only** token, scores your
-organization's governance posture across **69 checks in seven axes**, and tells
+organization's governance posture across **71 checks in seven axes**, and tells
 you exactly what to fix, all without ever writing to GitHub, persisting your
 token, or sending a single byte off your machine.
 
@@ -114,11 +114,11 @@ scopeward tui --org my-org             # browse findings in an interactive TUI
 | Axis | Examples |
 |------|----------|
 | **Human Identity** | members without 2FA, org-wide 2FA not enforced, accounts outside SSO, SSO emails off the company domain, outside collaborators, owner sprawl, stale invitations |
-| **Teams & Permissions** | over-permissive base permission, direct admin/repo grants that bypass teams, deep nesting, team sprawl, ghost/orphan/empty/singleton teams, ownership gaps (no owning team / CODEOWNERS), weak or unenforced branch protection & rulesets, elevated custom roles; on GitLab: unprotected default branches, force-push allowed, missing CODEOWNERS, and (Premium) merge-request approvals that the author can self-clear or that survive a new push |
+| **Teams & Permissions** | over-permissive base permission, direct admin/repo grants that bypass teams, deep nesting, team sprawl, ghost/orphan/empty/singleton teams, ownership gaps (no owning team / CODEOWNERS), weak, admin-bypassable or unenforced branch protection & rulesets, elevated custom roles; on GitLab: unprotected default branches, force-push allowed, missing CODEOWNERS, and (Premium) merge-request approvals that the author can self-clear or that survive a new push |
 | **Non-Human Identities** | GitHub Apps with write/admin, writable deploy keys, webhooks without a secret or with SSL disabled, non-expiring PATs, broad classic PATs, org secrets visible to all repos, open Actions policy, self-hosted runners, `GITHUB_TOKEN` defaulting to write, Actions that can approve PRs; on GitLab: non-expiring / broadly-scoped / stale personal, project & group access tokens, non-expiring deploy tokens, trusted or public OAuth apps, unprotected CI/CD secret variables, runners usable from unprotected refs, CI_JOB_TOKEN allowlist disabled |
 | **AI Agents** | inventory of bot/machine committers, agents committing with over-broad write scope, unidentified bot committers, agents pushing to unprotected branches, idle/non-member Copilot seats |
 | **Code Security** | secret scanning / push protection / Dependabot alerts off by default, repos without push protection or with Dependabot alerts disabled, open (leaked) secret-scanning alerts, open Dependabot vulnerability alerts |
-| **Supply Chain** | unpinned third-party Actions, `pull_request_target` triggers |
+| **Supply Chain** | unpinned third-party Actions, internal reusable workflows tracked by branch, `pull_request_target` triggers |
 | **Repository Hygiene** | stale repositories with no pushes past a threshold |
 
 ## Suppressing findings
@@ -133,6 +133,24 @@ ignore:
     resource: acme-co/public-docs
     reason: intentional external docs contributor
 ```
+
+Every suppression is reported back under **Accepted risks**, with its `reason`
+and the score the suppressions bought:
+
+```text
+  Accepted risks
+    · dana is an outside collaborator
+      acme-co/public-docs · human.outside-collaborator
+      accepted: intentional external docs contributor
+    1 suppressed · score without them: 75 B (currently 81 B)
+```
+
+`reason` is optional but recommended — a rule without one is reported as
+*no reason recorded*, since documented risk acceptance is the point of the
+mechanism. The reason also reaches `--format json` (with an
+`unsuppressed_score`), the HTML report, and `--format sarif` (as a native
+`suppressions` entry, so dashboards show accepted risks with their
+justification).
 
 ## Token scopes
 

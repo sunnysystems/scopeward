@@ -42,6 +42,9 @@ func (c staleRepo) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	}
 
 	var out []model.Finding
+	// Deliberately s.Repos, not activeRepos: this check is about the archived flag
+	// itself — an archived repo is the outcome it recommends, so it has to see one
+	// to know not to flag it.
 	for _, r := range s.Repos {
 		if r.Archived || r.PushedAt == nil {
 			continue // archived is intentional; nil push date is unknown

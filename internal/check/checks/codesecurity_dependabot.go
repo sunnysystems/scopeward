@@ -31,7 +31,7 @@ func (repoDependabotAlertsOff) Meta() check.CheckMeta {
 
 func (c repoDependabotAlertsOff) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		if r.DependabotAlertsEnabled == nil || *r.DependabotAlertsEnabled {
 			continue // unknown or enabled
 		}
@@ -68,7 +68,7 @@ func (openDependabotAlerts) Meta() check.CheckMeta {
 
 func (c openDependabotAlerts) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		a := r.OpenDependabotAlerts
 		if a == nil || a.Total() == 0 {
 			continue

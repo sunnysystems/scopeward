@@ -26,7 +26,7 @@ func (repoNoPushProtection) Meta() check.CheckMeta {
 
 func (c repoNoPushProtection) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		if r.PushProtection == nil || *r.PushProtection {
 			continue // unknown or enabled
 		}

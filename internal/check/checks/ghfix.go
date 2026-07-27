@@ -86,6 +86,17 @@ func ghProtectBranch(org, repo, branch string, requireReview bool) fix {
 	}
 }
 
+// ghEnforceAdmins applies a branch's existing protection to administrators too.
+// This uses the dedicated enforce_admins endpoint rather than the full protection
+// PUT of ghProtectBranch, because that PUT replaces every rule at once and would
+// silently drop required status checks the repo already has.
+func ghEnforceAdmins(org, repo, branch string) fix {
+	return fix{
+		cmd:    fmt.Sprintf("gh api -X POST repos/%s/%s/branches/%s/protection/enforce_admins", org, repo, branch),
+		verify: fmt.Sprintf("gh api repos/%s/%s/branches/%s/protection/enforce_admins --jq '.enabled'", org, repo, branch),
+	}
+}
+
 // ghFixWebhookSSL re-enables SSL verification on a webhook. apiPath is the
 // hook's REST path without the trailing /hooks/{id} (e.g. "orgs/acme" or
 // "repos/acme/api"). Only the insecure-SSL aspect is mechanically fixable; a

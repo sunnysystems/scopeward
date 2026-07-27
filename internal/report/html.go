@@ -20,22 +20,24 @@ var htmlTemplateSrc string
 var htmlTemplate = template.Must(template.New("report").Parse(htmlTemplateSrc))
 
 type htmlView struct {
-	OrgLogin        string
-	OrgDisplay      string
-	GeneratedAt     string
-	Score           score.Score
-	GradeColor      string
-	Dashboard       dashboardView
-	FindingCount    int
-	AxisCount       int
-	CheckCount      int
-	Severities      []sevCount
-	Axes            []axisGroup
-	TeamDesign      *teamDesignView
-	NotEvaluated    []nevalView
-	Coverage        []covView
-	CoverageSummary string   // compact tally for the collapsed coverage header
-	Suggestions     []string // autocomplete entries for the findings search box
+	OrgLogin         string
+	OrgDisplay       string
+	GeneratedAt      string
+	Score            score.Score
+	GradeColor       string
+	Dashboard        dashboardView
+	FindingCount     int
+	AxisCount        int
+	CheckCount       int
+	Severities       []sevCount
+	Axes             []axisGroup
+	TeamDesign       *teamDesignView
+	NotEvaluated     []nevalView
+	AcceptedRisks    []acceptedRiskView
+	SuppressionDelta string // "3 suppressed · score without them: 61 C (currently 72 C)"
+	Coverage         []covView
+	CoverageSummary  string   // compact tally for the collapsed coverage header
+	Suggestions      []string // autocomplete entries for the findings search box
 }
 
 type teamDesignView struct {
@@ -100,6 +102,15 @@ type nevalView struct {
 	Missing string
 }
 
+// acceptedRiskView is one finding the ignore config suppressed, shown with the
+// reason the rule gave. Rendered so a reader can audit the acceptances, not just
+// learn that some exist.
+type acceptedRiskView struct {
+	Title   string
+	CheckID string
+	Reason  string
+}
+
 type covView struct {
 	Kind   string
 	Mark   string
@@ -138,7 +149,30 @@ func buildHTMLView(a Audit) htmlView {
 	v.AxisCount = len(v.Axes)
 	v.CoverageSummary = coverageSummary(v.Coverage)
 	v.Suggestions = filterSuggestions(a.Report.Findings)
+	v.AcceptedRisks, v.SuppressionDelta = acceptedRiskViews(a)
 	return v
+}
+
+// acceptedRiskViews renders the ignore config's suppressions and, when they moved
+// the number, what the score would be without them.
+func acceptedRiskViews(a Audit) ([]acceptedRiskView, string) {
+	if len(a.Suppressed) == 0 {
+		return nil, ""
+	}
+	out := make([]acceptedRiskView, 0, len(a.Suppressed))
+	for _, s := range a.Suppressed {
+		out = append(out, acceptedRiskView{
+			Title:   s.Finding.Title,
+			CheckID: s.Finding.CheckID,
+			Reason:  s.Reason,
+		})
+	}
+	delta := ""
+	if u := a.UnsuppressedScore; u.Value != a.Score.Value {
+		delta = fmt.Sprintf("%s · score without them: %d %s (currently %d %s)",
+			plural(len(a.Suppressed), "suppressed finding"), u.Value, u.Grade, a.Score.Value, a.Score.Grade)
+	}
+	return out, delta
 }
 
 // filterSuggestions collects the distinct terms worth offering as search

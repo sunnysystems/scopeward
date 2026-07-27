@@ -256,9 +256,16 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 	}
 
 	if ignoreCfg != nil {
-		var suppressed []model.Finding
+		// Score the unfiltered set first: the delta between it and the final score
+		// is exactly what the ignore config bought, and hiding that would make a
+		// suppression an invisible discount on the headline number.
+		unsuppressed := score.Grade(audit.Report.Findings)
+		var suppressed []report.Suppression
 		audit.Report.Findings, suppressed = ignoreCfg.apply(audit.Report.Findings)
 		audit.Suppressed = suppressed
+		if len(suppressed) > 0 {
+			audit.UnsuppressedScore = unsuppressed
+		}
 	}
 
 	if opts.baseline != "" {

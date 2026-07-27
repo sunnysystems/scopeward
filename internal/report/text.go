@@ -31,10 +31,7 @@ func Text(out io.Writer, a Audit) {
 		renderTeamDesignText(out, td)
 	}
 	renderNotEvaluated(out, a.Report.Skipped)
-	if n := len(a.Suppressed); n > 0 {
-		fmt.Fprintln(out, ui.Subtle.Render(fmt.Sprintf("%d finding(s) suppressed by ignore config.", n)))
-		fmt.Fprintln(out)
-	}
+	renderAcceptedRisks(out, a)
 	renderCoverage(out, a.Snapshot.Coverage)
 }
 
@@ -132,6 +129,40 @@ func renderNotEvaluated(out io.Writer, skipped []check.Skipped) {
 			s.Title,
 			ui.Subtle.Render(fmt.Sprintf("· %s · needs %s", s.CheckID, joinKinds(s.Missing))),
 		)
+	}
+	fmt.Fprintln(out)
+}
+
+// renderAcceptedRisks lists what the ignore config suppressed, with the reason
+// each rule recorded and the score the suppressions bought. A count alone told
+// the reader that something was hidden but not what, why, or at what discount —
+// and since the score is computed after filtering, that discount is real.
+func renderAcceptedRisks(out io.Writer, a Audit) {
+	if len(a.Suppressed) == 0 {
+		return
+	}
+	fmt.Fprintln(out, ui.Label.Render("Accepted risks"))
+	for _, s := range a.Suppressed {
+		reason := s.Reason
+		if reason == "" {
+			// Not an error: an undocumented acceptance is still an acceptance. But it
+			// is the one worth prompting about, since nobody will remember it later.
+			reason = ui.WarnTag.Render("no reason recorded")
+		}
+		name := s.Finding.Resource.Name
+		if name == "" {
+			name = a.Snapshot.Org.Login
+		}
+		// Title then "resource · check-id", matching the findings list, with the
+		// accepted reason on its own line so it is the thing that reads as content.
+		fmt.Fprintf(out, "  %s %s\n", ui.Subtle.Render("·"), s.Finding.Title)
+		fmt.Fprintf(out, "    %s\n", ui.Subtle.Render(name+" · "+s.Finding.CheckID))
+		fmt.Fprintf(out, "    %s %s\n", ui.Subtle.Render("accepted:"), reason)
+	}
+	if u := a.UnsuppressedScore; u.Value != a.Score.Value {
+		fmt.Fprintln(out, ui.Subtle.Render(fmt.Sprintf(
+			"  %d suppressed · score without them: %d %s (currently %d %s)",
+			len(a.Suppressed), u.Value, u.Grade, a.Score.Value, a.Score.Grade)))
 	}
 	fmt.Fprintln(out)
 }

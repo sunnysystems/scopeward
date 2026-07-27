@@ -83,6 +83,21 @@ func Markdown(w io.Writer, a Audit) {
 		fmt.Fprintln(w)
 	}
 
+	if len(a.Suppressed) > 0 {
+		fmt.Fprint(w, "## Accepted risks\n\n")
+		for _, s := range a.Suppressed {
+			reason := s.Reason
+			if reason == "" {
+				reason = "**no reason recorded**"
+			}
+			fmt.Fprintf(w, "- %s (`%s`) — %s\n", s.Finding.Title, s.Finding.CheckID, reason)
+		}
+		if u := a.UnsuppressedScore; u.Value != a.Score.Value {
+			fmt.Fprintf(w, "\n_Score without these suppressions: %d/100 (%s)_\n", u.Value, u.Grade)
+		}
+		fmt.Fprintln(w)
+	}
+
 	fmt.Fprint(w, "## Coverage\n\n")
 	items := a.Snapshot.Coverage.All()
 	sort.Slice(items, func(i, j int) bool { return items[i].Kind < items[j].Kind })

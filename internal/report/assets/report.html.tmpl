@@ -347,6 +347,13 @@
 {{range .NotEvaluated}}<p class="neval">~ {{.Title}} <span class="cid">{{.CheckID}} · needs {{.Missing}}</span></p>{{end}}
 {{end}}
 
+{{if .AcceptedRisks}}
+<h2 class="axis">Accepted risks</h2>
+{{if .SuppressionDelta}}<p class="neval">{{.SuppressionDelta}}</p>{{end}}
+{{range .AcceptedRisks}}<p class="neval">{{.Title}} <span class="cid">{{.CheckID}}</span><br>
+{{if .Reason}}{{.Reason}}{{else}}<b>no reason recorded</b>{{end}}</p>{{end}}
+{{end}}
+
 <details class="axissection">
   <summary class="axissum">Coverage<span class="line"></span>{{if .CoverageSummary}}<span class="axiscount">{{.CoverageSummary}}</span>{{end}}</summary>
   <table class="cov">

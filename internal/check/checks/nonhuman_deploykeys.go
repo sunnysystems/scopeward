@@ -34,7 +34,7 @@ func (c writableDeployKey) Run(_ context.Context, s *model.Snapshot) []model.Fin
 	}
 
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		for _, k := range r.DeployKeys {
 			if k.ReadOnly {
 				continue

@@ -28,7 +28,7 @@ func (agentOnUnprotectedBranch) Meta() check.CheckMeta {
 
 func (c agentOnUnprotectedBranch) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		if r.DefaultBranchProtected == nil || *r.DefaultBranchProtected || len(r.BotCommitters) == 0 {
 			continue
 		}

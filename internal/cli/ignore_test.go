@@ -10,8 +10,8 @@ import (
 
 func TestIgnoreApply(t *testing.T) {
 	cfg := &ignoreConfig{Ignore: []ignoreRule{
-		{Check: "human.owner-sprawl"},                                         // suppress all of this check
-		{Check: "teams.unprotected-default-branch", Resource: "acme/instana"}, // only this repo
+		{Check: "human.owner-sprawl"}, // suppress all of this check; no reason given
+		{Check: "teams.unprotected-default-branch", Resource: "acme/instana", Reason: "docs-only mirror, reviewed 2026-07"},
 	}}
 
 	findings := []model.Finding{
@@ -35,6 +35,41 @@ func TestIgnoreApply(t *testing.T) {
 		if f.Resource.Name == "acme/instana" {
 			t.Error("instana branch finding should have been suppressed")
 		}
+	}
+
+	// The reason must reach the suppression, and a rule that documented nothing
+	// must stay visibly undocumented rather than borrowing another rule's reason.
+	byCheck := map[string]string{}
+	for _, s := range suppressed {
+		byCheck[s.Finding.CheckID] = s.Reason
+	}
+	if got := byCheck["teams.unprotected-default-branch"]; got != "docs-only mirror, reviewed 2026-07" {
+		t.Errorf("reason = %q, want the rule's reason", got)
+	}
+	if got := byCheck["human.owner-sprawl"]; got != "" {
+		t.Errorf("reason = %q, want empty for a rule with no reason", got)
+	}
+}
+
+// A rule naming a specific resource must win over a later check-wide rule, so the
+// more precise reason is the one reported.
+func TestIgnoreApply_FirstMatchSuppliesTheReason(t *testing.T) {
+	cfg := &ignoreConfig{Ignore: []ignoreRule{
+		{Check: "nonhuman.app-broad-permissions", Resource: "acme-monitoring", Reason: "our monitoring integration"},
+		{Check: "nonhuman.app-broad-permissions", Reason: "blanket acceptance"},
+	}}
+	_, suppressed := cfg.apply([]model.Finding{
+		{CheckID: "nonhuman.app-broad-permissions", Resource: model.ResourceRef{Name: "acme-monitoring"}},
+		{CheckID: "nonhuman.app-broad-permissions", Resource: model.ResourceRef{Name: "some-other-app"}},
+	})
+	if len(suppressed) != 2 {
+		t.Fatalf("suppressed = %d, want 2", len(suppressed))
+	}
+	if suppressed[0].Reason != "our monitoring integration" {
+		t.Errorf("specific rule reason = %q", suppressed[0].Reason)
+	}
+	if suppressed[1].Reason != "blanket acceptance" {
+		t.Errorf("fallback rule reason = %q", suppressed[1].Reason)
 	}
 }
 
