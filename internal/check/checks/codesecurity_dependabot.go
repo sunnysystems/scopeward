@@ -3,6 +3,7 @@ package checks
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/sunnysystems/scopeward/internal/check"
 	"github.com/sunnysystems/scopeward/internal/model"
@@ -53,7 +54,31 @@ func (c repoDependabotAlertsOff) Run(_ context.Context, s *model.Snapshot) []mod
 
 // openDependabotAlerts flags repositories that have open Dependabot alerts on
 // their dependencies, deriving severity from the highest-severity open alert.
+//
+// Severity and weight are different questions, and this check answers only the
+// first. "One critical CVE outweighs any number of mediums" is right for how
+// urgent a repository is; it says nothing about how much work it represents. A
+// repo with 1 critical and a repo with 1 critical plus 98 others are both
+// critical, and triage order is the main thing a reader wants here — so the
+// counts appear in the title and the remediation rather than being buried in the
+// evidence. Making volume move the *score* is a scoring-model question, left to
+// the model redesign so it is decided once rather than patched per check.
 type openDependabotAlerts struct{}
+
+// alertBreakdown renders the per-severity counts, omitting empty bands, so a
+// 99-alert repo is distinguishable from a 1-alert one at a glance.
+func alertBreakdown(a model.DependabotAlertSummary) string {
+	var parts []string
+	for _, band := range []struct {
+		n    int
+		name string
+	}{{a.Critical, "critical"}, {a.High, "high"}, {a.Medium, "medium"}, {a.Low, "low"}} {
+		if band.n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", band.n, band.name))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
 
 func (openDependabotAlerts) Meta() check.CheckMeta {
 	return check.CheckMeta{
@@ -82,9 +107,15 @@ func (c openDependabotAlerts) Run(_ context.Context, s *model.Snapshot) []model.
 		case a.High > 0:
 			sev = model.SevHigh
 		}
+		urgent := a.Critical + a.High
+		remediation := "Review the open Dependabot alerts and update the affected dependencies (or apply the suggested fix PRs)."
+		if urgent > 0 {
+			remediation = fmt.Sprintf("Start with the %d critical/high alert(s) — those are where exploits are usually public — then work through the remaining %d. Applying Dependabot's suggested fix PRs handles most of them.",
+				urgent, a.Total()-urgent)
+		}
 		out = append(out, model.Finding{
 			CheckID:  c.Meta().ID,
-			Title:    fmt.Sprintf("%s/%s has %d open Dependabot alert(s)", s.Org.Login, r.Name, a.Total()),
+			Title:    fmt.Sprintf("%s/%s has %d open Dependabot alert(s) (%s)", s.Org.Login, r.Name, a.Total(), alertBreakdown(*a)),
 			Severity: sev,
 			Axis:     model.AxisCodeSecurity,
 			Resource: repoRef(s.Org.Login, r),
@@ -96,8 +127,8 @@ func (c openDependabotAlerts) Run(_ context.Context, s *model.Snapshot) []model.
 				"low":      a.Low,
 				"total":    a.Total(),
 			},
-			Description: "Dependabot has flagged dependencies with known vulnerabilities in this repository. Critical and high-severity alerts are the most urgent to patch, since exploits are usually public.",
-			Remediation: "Review the open Dependabot alerts and update the affected dependencies (or apply the suggested fix PRs). Start with the critical and high-severity ones.",
+			Description: "Dependabot has flagged dependencies with known vulnerabilities in this repository. Severity here reflects the most urgent alert, not how many there are — the counts in the title are what tells you how much work this repository represents relative to the others.",
+			Remediation: remediation,
 			DocsURL:     "https://docs.github.com/code-security/dependabot/dependabot-alerts/viewing-and-updating-dependabot-alerts",
 		})
 	}
