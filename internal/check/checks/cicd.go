@@ -133,7 +133,7 @@ func (ciJobTokenOpen) Meta() check.CheckMeta {
 
 func (c ciJobTokenOpen) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		if r.JobTokenInboundEnabled == nil || *r.JobTokenInboundEnabled {
 			continue // unknown, or the allowlist is enforced (the safe state)
 		}

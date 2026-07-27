@@ -46,7 +46,7 @@ type agent struct {
 // installed App (by slug) or the default GITHUB_TOKEN to infer write breadth.
 func buildAgents(s *model.Snapshot) []agent {
 	agg := map[string]*agent{}
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		for _, bc := range r.BotCommitters {
 			a := agg[bc.Login]
 			if a == nil {

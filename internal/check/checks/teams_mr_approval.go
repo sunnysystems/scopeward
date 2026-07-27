@@ -39,7 +39,7 @@ func (c mrApprovalBypassable) Run(_ context.Context, s *model.Snapshot) []model.
 		return nil
 	}
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		var weaknesses []string
 		if r.MRAuthorCanApprove != nil && *r.MRAuthorCanApprove {
 			weaknesses = append(weaknesses, "author can approve their own MR")

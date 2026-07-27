@@ -34,7 +34,7 @@ func (weakBranchProtection) Meta() check.CheckMeta {
 func (c weakBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	gitlab := s.Provider == model.ProviderGitLab
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		// Each weakness is assessed independently on whatever detail was collected:
 		// on GitLab Free, force-push is knowable from protected branches while
 		// required-review (approval rules) is not, so they must not gate each other.
@@ -99,7 +99,7 @@ func (bypassableBranchProtection) Meta() check.CheckMeta {
 
 func (c bypassableBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		// nil = not assessed: no classic protection, ruleset-protected, or a
 		// provider that does not expose the setting. Only an explicit false is a
 		// finding.

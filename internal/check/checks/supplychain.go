@@ -51,7 +51,7 @@ func (unpinnedActions) Meta() check.CheckMeta {
 
 func (c unpinnedActions) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		list := unpinnedRefs(r, "unpinned-action")
 		if len(list) == 0 {
 			continue
@@ -92,7 +92,7 @@ func (internalUnpinnedActions) Meta() check.CheckMeta {
 
 func (c internalUnpinnedActions) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		list := unpinnedRefs(r, "internal-unpinned-action")
 		if len(list) == 0 {
 			continue
@@ -130,7 +130,7 @@ func (pullRequestTarget) Meta() check.CheckMeta {
 
 func (c pullRequestTarget) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		var files []string
 		for _, w := range r.WorkflowIssues {
 			if w.Kind == "pull-request-target" {

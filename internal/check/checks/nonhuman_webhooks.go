@@ -56,7 +56,7 @@ func (c webhookHygiene) Run(_ context.Context, s *model.Snapshot) []model.Findin
 			items = append(items, scopedHook{hook: h, res: orgRef(s.Org), where: s.Org.Login, apiPath: "orgs/" + s.Org.Login})
 		}
 	} else {
-		for _, r := range s.Repos {
+		for _, r := range activeRepos(s) {
 			for _, h := range r.Webhooks {
 				items = append(items, scopedHook{hook: h, res: repoRef(s.Org.Login, r), where: s.Org.Login + "/" + r.Name, apiPath: "repos/" + s.Org.Login + "/" + r.Name})
 			}

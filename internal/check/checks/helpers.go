@@ -68,6 +68,35 @@ func repoResource(s *model.Snapshot, r model.Repo) model.ResourceRef {
 	return repoRef(s.Org.Login, r)
 }
 
+// activeRepos returns the repositories a check should assess: every repo that is
+// not archived. Range over this instead of s.Repos.
+//
+// An archived repository is read-only. Nothing can be pushed to it, no workflow
+// runs in it, and no grant on it confers write in practice — so a finding about
+// who may change its code is moot, and telling an operator to harden a repo they
+// have already retired is noise.
+//
+// Checks used to get this behaviour by accident: the collector skips archived
+// repos when filling in detail fields, so most checks saw only nil and stayed
+// quiet. That coupling lived in another package, was stated nowhere, and held
+// only as long as every snapshot came from that collector — a fixture, a snapshot
+// cached before the repo was archived, or a future collector that stops filtering
+// would light up findings on repos nobody can push to. This states the intent
+// where the decision belongs.
+//
+// Two checks deliberately do not use it, and say so at their loop: a credential
+// committed to an archived repo is still leaked (codesecurity.open-secret-alerts),
+// and hygiene.stale-repo needs to see the archived flag to decide anything.
+func activeRepos(s *model.Snapshot) []model.Repo {
+	out := make([]model.Repo, 0, len(s.Repos))
+	for _, r := range s.Repos {
+		if !r.Archived {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // teamRef builds a ResourceRef pointing at a team.
 func teamRef(org string, t model.Team) model.ResourceRef {
 	return model.ResourceRef{

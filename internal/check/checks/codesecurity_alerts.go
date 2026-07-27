@@ -27,6 +27,15 @@ func (openSecretAlerts) Meta() check.CheckMeta {
 
 func (c openSecretAlerts) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
+	// Deliberately s.Repos, not activeRepos: archiving a repository makes it
+	// read-only, it does not un-leak a credential that is already in its history
+	// and still valid. This is the one axis where archiving must not resolve the
+	// finding, or the tool would teach archiving as a way to clear leaked secrets.
+	//
+	// The GitHub collector does not yet fetch alerts for archived repos, so in a
+	// live run this still reports nothing for them; the check is nonetheless
+	// correct for any snapshot that carries the data (a cached snapshot taken
+	// before the repo was archived, or another provider's collector).
 	for _, r := range s.Repos {
 		if r.OpenSecretAlerts == nil || *r.OpenSecretAlerts == 0 {
 			continue

@@ -51,8 +51,8 @@ func (c repoNoOwningTeam) Run(_ context.Context, s *model.Snapshot) []model.Find
 	}
 
 	var out []model.Finding
-	for _, r := range s.Repos {
-		if r.Archived || owned[r.Name] {
+	for _, r := range activeRepos(s) {
+		if owned[r.Name] {
 			continue
 		}
 		out = append(out, model.Finding{
@@ -89,6 +89,8 @@ func (repoNoOwningProperty) Meta() check.CheckMeta {
 func (c repoNoOwningProperty) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	// Opt-in by adoption: skip entirely if the org sets no custom properties at all.
 	adopted := false
+	// s.Repos here on purpose: adoption is an org-wide question, and a property set
+	// on a since-archived repo is still evidence the org uses the convention.
 	for _, r := range s.Repos {
 		if len(r.Properties) > 0 {
 			adopted = true
@@ -105,8 +107,8 @@ func (c repoNoOwningProperty) Run(_ context.Context, s *model.Snapshot) []model.
 	}
 
 	var out []model.Finding
-	for _, r := range s.Repos {
-		if r.Archived || r.Properties[prop] != "" {
+	for _, r := range activeRepos(s) {
+		if r.Properties[prop] != "" {
 			continue
 		}
 		out = append(out, model.Finding{
@@ -143,9 +145,9 @@ func (repoNoCodeowner) Meta() check.CheckMeta {
 
 func (c repoNoCodeowner) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
-		// Skip when unassessed, archived, or an empty repo (no default branch).
-		if r.CodeownersPresent == nil || r.Archived || r.DefaultBranch == "" {
+	for _, r := range activeRepos(s) {
+		// Skip when unassessed, or an empty repo (no default branch).
+		if r.CodeownersPresent == nil || r.DefaultBranch == "" {
 			continue
 		}
 		if *r.CodeownersPresent && len(r.CodeownersTeams) > 0 {

@@ -36,7 +36,7 @@ const (
 func (c unprotectedDefaultBranch) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	gitlab := s.Provider == model.ProviderGitLab
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		if r.DefaultBranchProtected == nil || *r.DefaultBranchProtected {
 			continue // unknown or protected
 		}

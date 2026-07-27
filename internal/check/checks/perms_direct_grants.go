@@ -30,7 +30,7 @@ func (directAdminGrant) Meta() check.CheckMeta {
 
 func (c directAdminGrant) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		for _, g := range r.DirectCollaborators {
 			if g.Permission != "admin" {
 				continue
@@ -69,7 +69,7 @@ func (directRepoGrant) Meta() check.CheckMeta {
 
 func (c directRepoGrant) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
-	for _, r := range s.Repos {
+	for _, r := range activeRepos(s) {
 		for _, g := range r.DirectCollaborators {
 			if g.Permission == "admin" {
 				continue // covered by perms.direct-admin-grant at higher severity
