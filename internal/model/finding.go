@@ -23,5 +23,10 @@ type Finding struct {
 	Remediation string         `json:"remediation,omitempty"` // advice only — the tool never writes
 	GHFix       string         `json:"gh_fix,omitempty"`      // suggested `gh` command(s), newline-separated (NOT run by scopeward)
 	GHVerify    string         `json:"gh_verify,omitempty"`   // read-only `gh` command to confirm the fix took effect
-	DocsURL     string         `json:"docs_url,omitempty"`
+	// GHScopes are the token scopes GHFix needs. Declared by the fix that builds
+	// the command rather than inferred from its text, so the fix script can state
+	// up front which of them the current token is missing instead of letting the
+	// operator discover it one failed command at a time.
+	GHScopes []string `json:"gh_scopes,omitempty"`
+	DocsURL  string   `json:"docs_url,omitempty"`
 }

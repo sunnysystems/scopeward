@@ -85,3 +85,43 @@ func TestNewFixCommands(t *testing.T) {
 		}
 	}
 }
+
+// Every suggested command must declare the scopes it needs. A fix that forgets
+// is the exact failure #36 is about: the operator finds out only when the block
+// fails, and often with a 404 that reads as "that does not exist".
+func TestEveryFixDeclaresItsScopes(t *testing.T) {
+	valid := map[string]bool{
+		scopeRepo: true, scopeAdminOrg: true, scopeAdminOrgHook: true, scopeManageCopilot: true,
+	}
+	cases := map[string]fix{
+		"ghOrgPatch":                   ghOrgPatch("acme", "f", "v"),
+		"ghHardenWorkflowToken":        ghHardenWorkflowToken("acme"),
+		"ghRepoEnablePushProtection":   ghRepoEnablePushProtection("acme", "api"),
+		"ghRepoEnableDependabotAlerts": ghRepoEnableDependabotAlerts("acme", "api"),
+		"ghProtectBranch":              ghProtectBranch("acme", "api", "main", true, true),
+		"ghEnforceAdmins":              ghEnforceAdmins("acme", "api", "main"),
+		"ghFixWebhookSSL/repo":         ghFixWebhookSSL("repos/acme/api", 1),
+		"ghFixWebhookSSL/org":          ghFixWebhookSSL("orgs/acme", 1),
+		"ghRemoveCopilotSeat":          ghRemoveCopilotSeat("acme", "bob"),
+		"ghArchiveRepo":                ghArchiveRepo("acme", "old"),
+		"ghRemoveOutsideCollaborator":  ghRemoveOutsideCollaborator("acme", "bob"),
+		"ghCancelInvitation":           ghCancelInvitation("acme", 1),
+		"ghRevokeCredential":           ghRevokeCredential("acme", 1),
+		"ghDeleteDeployKey":            ghDeleteDeployKey("acme", "api", "1"),
+		"ghRestrictActions":            ghRestrictActions("acme", "all"),
+	}
+	for name, f := range cases {
+		if len(f.scopes) == 0 {
+			t.Errorf("%s: declares no scopes", name)
+		}
+		for _, s := range f.scopes {
+			if !valid[s] {
+				t.Errorf("%s: unknown scope %q — add it to the named constants", name, s)
+			}
+		}
+	}
+	// An org hook is not covered by repo, so the two webhook levels must differ.
+	if ghFixWebhookSSL("orgs/acme", 1).scopes[0] == ghFixWebhookSSL("repos/acme/api", 1).scopes[0] {
+		t.Error("org and repo webhook fixes need different scopes")
+	}
+}

@@ -99,7 +99,7 @@ scopeward tui --org my-org             # browse findings in an interactive TUI
 | `--html report.html [--open]` | self-contained, Sunny-branded HTML report; no server, opens in the browser |
 | `--fail-on high` | exit non-zero when a finding at/above a severity exists (CI gate) |
 | `--baseline prior.json [--new-only]` | diff against a prior run; report or fail only on *new* findings |
-| `--fix-script fixes.sh` | write suggested `gh` remediation commands, **all commented out**; nothing runs until you uncomment |
+| `--fix-script fixes.sh` | write suggested `gh` remediation commands, **all commented out**; nothing runs until you uncomment. The header states which token scopes the commands need and which your token is missing, and each block names its own scope |
 
 ### Exit codes
 

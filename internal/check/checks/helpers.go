@@ -146,6 +146,6 @@ func adminBypassExpected(s *model.Snapshot) bool {
 //
 //	withFix(model.Finding{...}, ghOrgPatch(org, field, value))
 func withFix(f model.Finding, x fix) model.Finding {
-	f.GHFix, f.GHVerify = x.cmd, x.verify
+	f.GHFix, f.GHVerify, f.GHScopes = x.cmd, x.verify, x.scopes
 	return f
 }

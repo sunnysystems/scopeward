@@ -51,3 +51,72 @@ func TestFixScript(t *testing.T) {
 		t.Error("repo-level command missing")
 	}
 }
+
+// The script must declare the scopes its commands need and name the ones this
+// token is missing, rather than letting the operator discover them one failed
+// command at a time — several of these endpoints answer 404, not 403.
+func TestFixScriptDeclaresTokenScopes(t *testing.T) {
+	findings := []model.Finding{
+		{CheckID: "teams.unprotected-default-branch", Severity: model.SevHigh, Resource: model.ResourceRef{Name: "acme/api"},
+			GHFix: "gh api -X PUT repos/acme/api/branches/main/protection", GHScopes: []string{"repo"}},
+		{CheckID: "teams.base-permission-open", Severity: model.SevHigh, Resource: model.ResourceRef{Name: "acme"},
+			GHFix: "gh api -X PATCH orgs/acme -F default_repository_permission=read", GHScopes: []string{"admin:org"}},
+	}
+	base := Audit{Snapshot: model.NewSnapshot("acme"), Report: check.Report{Findings: findings}}
+
+	t.Run("missing scope is called out", func(t *testing.T) {
+		a := base
+		a.TokenScopes = []string{"repo", "read:org"}
+		var sb strings.Builder
+		FixScript(&sb, a)
+		out := sb.String()
+
+		for _, want := range []string{
+			"needs these token scopes: admin:org, repo",
+			"Your token has: repo, read:org",
+			"Missing — blocks marked below will fail: admin:org",
+			"404", // the trap: a missing scope reads as "not found"
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("header missing %q", want)
+			}
+		}
+		// Only the block the token cannot run is marked.
+		if n := strings.Count(out, "YOUR TOKEN LACKS THIS"); n != 1 {
+			t.Errorf("marked %d blocks as failing, want 1 (only admin:org)", n)
+		}
+	})
+
+	t.Run("sufficient token is told so", func(t *testing.T) {
+		a := base
+		a.TokenScopes = []string{"repo", "admin:org"}
+		var sb strings.Builder
+		FixScript(&sb, a)
+		out := sb.String()
+		if !strings.Contains(out, "Nothing missing") {
+			t.Error("a token holding every scope should be told nothing is missing")
+		}
+		if strings.Contains(out, "YOUR TOKEN LACKS THIS") {
+			t.Error("no block should be marked as failing")
+		}
+	})
+
+	// A fine-grained PAT or App token reports no scopes. Absent scopes must read
+	// as unknown, never as missing — claiming a block will fail when we cannot
+	// tell is worse than saying nothing.
+	t.Run("unknown scopes are not reported as missing", func(t *testing.T) {
+		a := base
+		a.TokenScopesUnknown = true
+		var sb strings.Builder
+		FixScript(&sb, a)
+		out := sb.String()
+		if !strings.Contains(out, "could not be read") {
+			t.Error("unknown scopes should be stated as unknown")
+		}
+		for _, unwanted := range []string{"Missing —", "YOUR TOKEN LACKS THIS"} {
+			if strings.Contains(out, unwanted) {
+				t.Errorf("must not claim %q when scopes are unknown", unwanted)
+			}
+		}
+	})
+}
