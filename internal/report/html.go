@@ -35,6 +35,7 @@ type htmlView struct {
 	NotEvaluated     []nevalView
 	AcceptedRisks    []acceptedRiskView
 	SuppressionDelta string // "3 suppressed · score without them: 61 C (currently 72 C)"
+	ArchiveLever     *archiveLeverView
 	Coverage         []covView
 	CoverageSummary  string   // compact tally for the collapsed coverage header
 	Suggestions      []string // autocomplete entries for the findings search box
@@ -102,6 +103,14 @@ type nevalView struct {
 	Missing string
 }
 
+// archiveLeverView is the aggregate return on archiving dead repositories, shown
+// above the findings so the largest available move is not buried under the highs
+// it would resolve.
+type archiveLeverView struct {
+	Summary string
+	Caution string
+}
+
 // acceptedRiskView is one finding the ignore config suppressed, shown with the
 // reason the rule gave. Rendered so a reader can audit the acceptances, not just
 // learn that some exist.
@@ -150,6 +159,9 @@ func buildHTMLView(a Audit) htmlView {
 	v.CoverageSummary = coverageSummary(v.Coverage)
 	v.Suggestions = filterSuggestions(a.Report.Findings)
 	v.AcceptedRisks, v.SuppressionDelta = acceptedRiskViews(a)
+	if l := buildArchiveLever(a); l != nil {
+		v.ArchiveLever = &archiveLeverView{Summary: l.summary(), Caution: l.caution()}
+	}
 	return v
 }
 

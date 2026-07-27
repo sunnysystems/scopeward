@@ -205,6 +205,12 @@
   table.cov .mark{width:24px;text-align:center;font-weight:700}
   .ok{color:var(--ok)} .partial{color:var(--amber)} .missing{color:var(--danger)}
   .reason{color:var(--gray-mid);font-size:12px}
+  .lever{background:var(--card);border-left:3px solid var(--amber);border-radius:6px;
+    padding:14px 18px;margin:22px 0}
+  .lever-h{color:var(--amber);font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+    font-size:.72rem;margin:0 0 6px}
+  .lever-s{color:var(--white);margin:0}
+  .lever-c{color:var(--gray-light);font-size:.86rem;margin:6px 0 0}
   .neval{color:var(--gray-light);margin:6px 0}
   .neval .cid{margin-left:6px}
   .empty{color:var(--gray-mid);font-style:italic}
@@ -279,6 +285,14 @@
   </div>
 </div>
 {{end}}{{end}}
+
+{{with .ArchiveLever}}
+<div class="lever">
+  <p class="lever-h">Biggest lever</p>
+  <p class="lever-s">{{.Summary}}</p>
+  <p class="lever-c">{{.Caution}}</p>
+</div>
+{{end}}
 
 {{if .Axes}}
 <div class="toolbar">

@@ -121,6 +121,23 @@ scopeward tui --org my-org             # browse findings in an interactive TUI
 | **Supply Chain** | unpinned third-party Actions, internal reusable workflows tracked by branch, `pull_request_target` triggers |
 | **Repository Hygiene** | stale repositories with no pushes past a threshold |
 
+For most organizations with history the largest single fix is archiving dead
+repositories, since one abandoned repo carries a whole stack of per-repo findings.
+The report leads with the aggregate rather than burying it under one 2-point
+`low` per repo:
+
+```text
+  Biggest lever
+    12 repositories have had no push past the stale threshold. Archiving them
+    resolves 65 findings worth 345 penalty (score 33 → 49 D).
+    Not counted above: 2 findings on these repositories stay real after
+    archiving — a committed credential is exposed whether or not the repo is
+    read-only. Rotate those first.
+```
+
+`--fix-script` emits the `gh` archive commands (reversible; archiving makes a
+repo read-only, it does not delete anything).
+
 ## Suppressing findings
 
 Drop a `.scopeward.yml` in your repo (auto-detected, or point at it with

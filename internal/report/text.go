@@ -26,6 +26,7 @@ func Text(out io.Writer, a Audit) {
 			ui.Good.Render(fmt.Sprintf("%d resolved", a.ResolvedCount)),
 		)
 	}
+	renderArchiveLever(out, a)
 	renderFindings(out, a)
 	if td := summarizeTeamDesign(a.Snapshot); td != nil {
 		renderTeamDesignText(out, td)
@@ -130,6 +131,21 @@ func renderNotEvaluated(out io.Writer, skipped []check.Skipped) {
 			ui.Subtle.Render(fmt.Sprintf("· %s · needs %s", s.CheckID, joinKinds(s.Missing))),
 		)
 	}
+	fmt.Fprintln(out)
+}
+
+// renderArchiveLever surfaces the aggregate return on archiving dead repos ahead
+// of the findings list, because it is usually the largest single move available
+// and the findings list buries it: it appears there only as one 2-point low per
+// repo, beneath every high it would resolve.
+func renderArchiveLever(out io.Writer, a Audit) {
+	l := buildArchiveLever(a)
+	if l == nil {
+		return
+	}
+	fmt.Fprintln(out, ui.Label.Render("Biggest lever"))
+	fmt.Fprintf(out, "  %s\n", l.summary())
+	fmt.Fprintf(out, "  %s\n", ui.Subtle.Render(l.caution()))
 	fmt.Fprintln(out)
 }
 
