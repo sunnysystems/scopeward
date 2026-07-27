@@ -169,6 +169,29 @@ and the gap is shown up front and in the coverage report. Some checks
 (fine-grained PAT inventory, custom roles) require GitHub Enterprise and are
 reported as not evaluated elsewhere.
 
+### Branch protection is scaled to your team
+
+A remediation nobody can live with is a remediation nobody applies, so the
+suggested branch-protection command adapts to the organization's size — no flag
+required:
+
+| Members | Suggested protection |
+|---|---|
+| 1 (or `--solo`) | pull request required, no approving review, admin bypass kept |
+| 2–4 | pull request + 1 approving review, admin bypass kept |
+| 5+ | pull request + 1 approving review, enforced on admins too |
+
+Below five people, requiring a review *and* removing the admin bypass leaves a
+team with no way to land an urgent fix when one person is away. So scopeward
+keeps the owner break-glass path, reports it as an `info` (zero penalty) so the
+exposure stays visible, and tells you to revisit it as the team grows — rather
+than recommending a lockout and then flagging you for the workaround.
+
+Above the threshold, an admin bypass becomes a `medium` finding
+(`teams.branch-protection-bypassable`). If you keep one deliberately, accept it
+in `.scopeward.yml` with a `reason` — it will then be reported under
+**Accepted risks** with your justification.
+
 > Working solo? Add `--solo` so suggested branch-protection fixes require a PR
 > but no approving review (you can't approve your own PR).
 

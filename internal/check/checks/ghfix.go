@@ -63,22 +63,31 @@ func ghRepoEnableDependabotAlerts(org, repo string) fix {
 }
 
 // ghProtectBranch applies classic branch protection to a repo's branch: require
-// a pull request, enforce on admins, and block force-pushes and deletion. The
-// protection PUT requires all four top-level keys (required_status_checks,
-// enforce_admins, required_pull_request_reviews, restrictions) even when null,
-// so the body is passed as JSON via a here-string on one line rather than -F.
+// a pull request and block force-pushes and deletion. The protection PUT requires
+// all four top-level keys (required_status_checks, enforce_admins,
+// required_pull_request_reviews, restrictions) even when null, so the body is
+// passed as JSON via a here-string on one line rather than -F.
 //
 // requireReview controls the approval count: 1 for a team (a second person must
 // approve), but 0 when there is effectively one developer — GitHub forbids
 // approving your own PR, so requiring an approval would lock the branch. With 0
 // the PR flow and force-push/deletion blocks still apply; only the second-person
 // approval is dropped.
-func ghProtectBranch(org, repo, branch string, requireReview bool) fix {
+//
+// enforceAdmins decides whether owners and repo admins are bound too. It is false
+// for a small organization: combined with a required review it would leave a
+// three-person team with no way to land an urgent fix when one person is away,
+// and a remediation nobody can live with is one nobody applies.
+func ghProtectBranch(org, repo, branch string, requireReview, enforceAdmins bool) fix {
 	reviews := `"required_pull_request_reviews":{"required_approving_review_count":0}`
 	if requireReview {
 		reviews = `"required_pull_request_reviews":{"required_approving_review_count":1,"dismiss_stale_reviews":true}`
 	}
-	body := `{"required_status_checks":null,"enforce_admins":true,` + reviews +
+	admins := "false"
+	if enforceAdmins {
+		admins = "true"
+	}
+	body := `{"required_status_checks":null,"enforce_admins":` + admins + `,` + reviews +
 		`,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}`
 	return fix{
 		cmd:    fmt.Sprintf("gh api -X PUT repos/%s/%s/branches/%s/protection --input - <<< '%s'", org, repo, branch, body),

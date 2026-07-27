@@ -116,6 +116,31 @@ func reviewExpected(s *model.Snapshot) bool {
 	return !s.Solo && len(s.Members) >= 2
 }
 
+// breakGlassThreshold is the member count below which scopeward stops asking an
+// organization to give up its administrator bypass on protected branches.
+//
+// The number is a judgement call, not a standard. Requiring an approving review
+// means every change waits on one of the other N-1 members; removing the admin
+// bypass on top of that means there is no path at all when nobody is available.
+// Below roughly five people that pool is thin enough that one holiday or one
+// timezone blocks a production fix, and the observed outcome is not a stricter
+// org — it is an operator who turns the whole thing off, or never applies it.
+const breakGlassThreshold = 5
+
+// adminBypassExpected reports whether keeping an administrator bypass
+// (enforce_admins off) is the configuration scopeward should recommend for this
+// organization: protection that binds everyone day to day, with owners retaining
+// a documented emergency path.
+//
+// Deliberately inferred rather than flagged. A small org that does want strict
+// enforcement simply sets it and is never flagged, since the bypass check only
+// fires when the bypass exists; a larger org that wants a break-glass path
+// accepts that one finding in .scopeward.yml, where the reason is now recorded
+// and reported. Both directions are covered without another flag to learn.
+func adminBypassExpected(s *model.Snapshot) bool {
+	return s.Solo || len(s.Members) < breakGlassThreshold
+}
+
 // withFix sets a finding's suggested-fix command and its verification command
 // from a fix, returning the finding so it reads naturally in a literal:
 //

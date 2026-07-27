@@ -51,10 +51,14 @@ func TestNewFixCommands(t *testing.T) {
 		got  fix
 		want []string // substrings the cmd must contain
 	}{
-		{"protect-branch-team", ghProtectBranch("acme", "api", "main", true),
-			[]string{"PUT repos/acme/api/branches/main/protection", "enforce_admins", `"required_approving_review_count":1`}},
-		{"protect-branch-solo", ghProtectBranch("acme", "api", "main", false),
-			[]string{"PUT repos/acme/api/branches/main/protection", "enforce_admins", `"required_approving_review_count":0`}},
+		{"protect-branch-team", ghProtectBranch("acme", "api", "main", true, true),
+			[]string{"PUT repos/acme/api/branches/main/protection", `"enforce_admins":true`, `"required_approving_review_count":1`}},
+		{"protect-branch-solo", ghProtectBranch("acme", "api", "main", false, false),
+			[]string{"PUT repos/acme/api/branches/main/protection", `"enforce_admins":false`, `"required_approving_review_count":0`}},
+		// A small team gets the middle configuration: review required, admin
+		// break-glass retained, so the branch is guarded without being a lockout.
+		{"protect-branch-small-team", ghProtectBranch("acme", "api", "main", true, false),
+			[]string{`"enforce_admins":false`, `"required_approving_review_count":1`}},
 		{"webhook-ssl-repo", ghFixWebhookSSL("repos/acme/api", 42),
 			[]string{"PATCH repos/acme/api/hooks/42", "config[insecure_ssl]=0"}},
 		{"webhook-ssl-org", ghFixWebhookSSL("orgs/acme", 7),
