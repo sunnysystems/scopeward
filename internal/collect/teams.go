@@ -199,8 +199,9 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 			protection.add(1)
 			if *p {
 				// Only protected branches have classic-protection detail worth fetching.
-				if pr, force, checks, derr := fetchBranchProtectionDetail(ctx, client, org, r.Name, r.DefaultBranch); derr == nil {
-					r.BranchReqPRReview, r.BranchAllowForcePush, r.BranchReqStatusChecks = pr, force, checks
+				if d, derr := fetchBranchProtectionDetail(ctx, client, org, r.Name, r.DefaultBranch); derr == nil && d != nil {
+					r.BranchReqPRReview, r.BranchAllowForcePush = d.reqPR, d.allowForce
+					r.BranchReqStatusChecks, r.BranchEnforceAdmins = d.reqChecks, d.enforceAdmins
 				}
 			}
 		}
@@ -458,11 +459,21 @@ func fetchDefaultBranchProtected(ctx context.Context, client *ghclient.Client, o
 	return &dto.Protected, nil
 }
 
+// branchProtectionDetail is the classic protection detail for one branch. Every
+// field is a pointer so "not assessed" stays distinguishable from "off"; a nil
+// *branchProtectionDetail means the branch has no classic protection to read.
+type branchProtectionDetail struct {
+	reqPR         *bool
+	allowForce    *bool
+	reqChecks     *bool
+	enforceAdmins *bool
+}
+
 // fetchBranchProtectionDetail reads the classic branch-protection settings for a
 // branch. The endpoint 404s when the branch is protected only by a ruleset (not
-// classic protection), in which case all returned pointers are nil so the
-// quality check skips it rather than reporting a false weakness.
-func fetchBranchProtectionDetail(ctx context.Context, client *ghclient.Client, org, repo, branch string) (reqPR, allowForce, reqChecks *bool, err error) {
+// classic protection), in which case it returns nil so the quality checks skip
+// the repo rather than reporting a false weakness.
+func fetchBranchProtectionDetail(ctx context.Context, client *ghclient.Client, org, repo, branch string) (*branchProtectionDetail, error) {
 	var dto struct {
 		RequiredPullRequestReviews *struct {
 			RequiredApprovingReviewCount int `json:"required_approving_review_count"`
@@ -473,17 +484,26 @@ func fetchBranchProtectionDetail(ctx context.Context, client *ghclient.Client, o
 		RequiredStatusChecks *struct {
 			Contexts []string `json:"contexts"`
 		} `json:"required_status_checks"`
+		EnforceAdmins *struct {
+			Enabled bool `json:"enabled"`
+		} `json:"enforce_admins"`
 	}
 	if _, e := client.Get(ctx, "/repos/"+org+"/"+repo+"/branches/"+branch+"/protection", nil, &dto); e != nil {
 		if ghclient.StatusCode(e) == 404 {
-			return nil, nil, nil, nil // ruleset-protected or not classically protected
+			return nil, nil // ruleset-protected or not classically protected
 		}
-		return nil, nil, nil, e
+		return nil, e
 	}
 	pr := dto.RequiredPullRequestReviews != nil && dto.RequiredPullRequestReviews.RequiredApprovingReviewCount > 0
 	force := dto.AllowForcePushes != nil && dto.AllowForcePushes.Enabled
 	checks := dto.RequiredStatusChecks != nil
-	return &pr, &force, &checks, nil
+	d := &branchProtectionDetail{reqPR: &pr, allowForce: &force, reqChecks: &checks}
+	// Absent enforce_admins is left unknown rather than assumed off, so a shape we
+	// did not anticipate degrades to "not evaluated" instead of a false finding.
+	if dto.EnforceAdmins != nil {
+		d.enforceAdmins = &dto.EnforceAdmins.Enabled
+	}
+	return d, nil
 }
 
 // fetchOrgRulesets lists the organization's repository rulesets.

@@ -150,10 +150,15 @@ type Repo struct {
 	OpenDependabotAlerts    *DependabotAlertSummary `json:"open_dependabot_alerts,omitempty"`
 	// Classic branch-protection detail for the default branch. nil = not assessed
 	// (unprotected, or protected via a ruleset which the classic endpoint can't see).
-	BranchReqPRReview     *bool           `json:"branch_requires_pr_review,omitempty"`
-	BranchAllowForcePush  *bool           `json:"branch_allows_force_push,omitempty"`
-	BranchReqStatusChecks *bool           `json:"branch_requires_status_checks,omitempty"`
-	WorkflowIssues        []WorkflowIssue `json:"workflow_issues,omitempty"`
+	BranchReqPRReview     *bool `json:"branch_requires_pr_review,omitempty"`
+	BranchAllowForcePush  *bool `json:"branch_allows_force_push,omitempty"`
+	BranchReqStatusChecks *bool `json:"branch_requires_status_checks,omitempty"`
+	// BranchEnforceAdmins reports whether the protection also applies to
+	// administrators. false means every org owner and repo admin can push straight
+	// to the protected branch, so the protection is bypassable by exactly the
+	// identities that most need it.
+	BranchEnforceAdmins *bool           `json:"branch_enforce_admins,omitempty"`
+	WorkflowIssues      []WorkflowIssue `json:"workflow_issues,omitempty"`
 	// Ownership signals. Properties holds this repo's org custom-property values
 	// (lowercased keys). CodeownersPresent is nil when not assessed; CodeownersTeams
 	// are the team references (@org/team) found in the CODEOWNERS file.

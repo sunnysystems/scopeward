@@ -7,10 +7,11 @@ package report
 // adjust freely as checks are added; anything unmapped falls under "Other".
 var checkCategory = map[string]string{
 	// Branch protection — merge gates, required reviews, protected branches.
-	"teams.unprotected-default-branch": "Branch protection",
-	"teams.weak-branch-protection":     "Branch protection",
-	"teams.ruleset-not-enforced":       "Branch protection",
-	"ai.agent-on-unprotected-branch":   "Branch protection",
+	"teams.unprotected-default-branch":   "Branch protection",
+	"teams.weak-branch-protection":       "Branch protection",
+	"teams.branch-protection-bypassable": "Branch protection",
+	"teams.ruleset-not-enforced":         "Branch protection",
+	"ai.agent-on-unprotected-branch":     "Branch protection",
 
 	// Vulnerability remediation — known-vulnerable dependencies.
 	"codesecurity.open-dependabot-alerts":     "Vulnerability remediation",

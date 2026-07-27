@@ -2,6 +2,7 @@ package checks
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,6 +129,34 @@ func TestWeakBranchProtection(t *testing.T) {
 	soloGot := weakBranchProtection{}.Run(context.Background(), solo)
 	if len(soloGot) != 1 {
 		t.Fatalf("--solo: want 1 (force-push only), got %d (%+v)", len(soloGot), soloGot)
+	}
+}
+
+func TestBypassableBranchProtection(t *testing.T) {
+	snap := model.NewSnapshot("acme")
+	snap.Members = make([]model.Member, 2)
+	snap.Repos = []model.Repo{
+		// Protection that looks clean to every other branch check, but admins bypass it.
+		{Name: "bypassable", BranchReqPRReview: bptr(true), BranchAllowForcePush: bptr(false), BranchEnforceAdmins: bptr(false)},
+		{Name: "enforced", BranchReqPRReview: bptr(true), BranchAllowForcePush: bptr(false), BranchEnforceAdmins: bptr(true)},
+		{Name: "ruleset", BranchEnforceAdmins: nil}, // not assessed → skip, never assumed off
+	}
+	got := bypassableBranchProtection{}.Run(context.Background(), snap)
+	if len(got) != 1 {
+		t.Fatalf("want 1 finding (bypassable), got %d (%+v)", len(got), got)
+	}
+	if got[0].Evidence["repo"] != "bypassable" || got[0].Severity != model.SevMedium {
+		t.Errorf("got %q at %v, want bypassable at medium", got[0].Evidence["repo"], got[0].Severity)
+	}
+	// The suggested fix must touch only enforce_admins: the full protection PUT
+	// would replace every rule and drop any required status checks.
+	if !strings.Contains(got[0].GHFix, "/protection/enforce_admins") {
+		t.Errorf("fix = %q, want the dedicated enforce_admins endpoint", got[0].GHFix)
+	}
+
+	// weakBranchProtection must stay silent here — the rules themselves are fine.
+	if weak := (weakBranchProtection{}).Run(context.Background(), snap); len(weak) != 0 {
+		t.Errorf("weak-branch-protection should not fire on admin bypass, got %+v", weak)
 	}
 }
 
