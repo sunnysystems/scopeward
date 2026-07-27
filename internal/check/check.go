@@ -20,6 +20,13 @@ type CheckMeta struct {
 	DefaultSeverity model.Severity   // severity used unless a finding overrides it
 	RequiresData    []model.DataKind // inputs that must be fully collected to evaluate
 	Description     string           // what the check looks for and why it matters
+	// SurvivesArchiving marks a check whose findings remain true after the
+	// repository is archived. Almost nothing does: archiving makes a repo
+	// read-only, so who may push to it stops mattering. A leaked credential does
+	// not stop mattering, which is why the distinction has to be recorded rather
+	// than assumed. Reporting reads this to avoid promising that archiving
+	// resolves a finding it would not.
+	SurvivesArchiving bool
 }
 
 // Check evaluates one governance concern against the snapshot.

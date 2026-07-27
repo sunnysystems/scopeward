@@ -33,6 +33,12 @@ func Markdown(w io.Writer, a Audit) {
 		fmt.Fprintf(w, "_vs baseline: %d new · %d resolved_\n\n", len(a.NewKeys), a.ResolvedCount)
 	}
 
+	if l := buildArchiveLever(a); l != nil {
+		fmt.Fprint(w, "## Biggest lever\n\n")
+		fmt.Fprintf(w, "%s\n\n", l.summary())
+		fmt.Fprintf(w, "_%s_\n\n", l.caution())
+	}
+
 	byAxis := map[model.Axis][]model.Finding{}
 	for _, f := range a.Report.Findings {
 		byAxis[f.Axis] = append(byAxis[f.Axis], f)
