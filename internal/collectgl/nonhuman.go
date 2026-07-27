@@ -34,7 +34,7 @@ func collectNonHuman(ctx context.Context, client *glclient.Client, snap *model.S
 
 	// GitHub Apps have no GitLab equivalent; GitLab tokens are collected as
 	// access tokens rather than through a fine-grained PAT policy. Record both
-	// so nonhuman.app-broad-permissions, the AI-agent checks, and
+	// so the GitHub App checks, the AI-agent checks, and
 	// nonhuman.pat-no-expiry degrade to "not evaluated".
 	snap.Coverage.Missing(model.DataAppInstallations, "GitHub Apps have no GitLab equivalent; GitLab uses OAuth applications & access tokens")
 	snap.Coverage.Missing(model.DataFineGrainedPATs, "GitLab access tokens are collected separately; there is no GitHub fine-grained-PAT policy")

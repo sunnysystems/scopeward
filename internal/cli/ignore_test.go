@@ -55,12 +55,12 @@ func TestIgnoreApply(t *testing.T) {
 // more precise reason is the one reported.
 func TestIgnoreApply_FirstMatchSuppliesTheReason(t *testing.T) {
 	cfg := &ignoreConfig{Ignore: []ignoreRule{
-		{Check: "nonhuman.app-broad-permissions", Resource: "acme-monitoring", Reason: "our monitoring integration"},
-		{Check: "nonhuman.app-broad-permissions", Reason: "blanket acceptance"},
+		{Check: "nonhuman.app-dangerous-permissions", Resource: "acme-monitoring", Reason: "our monitoring integration"},
+		{Check: "nonhuman.app-dangerous-permissions", Reason: "blanket acceptance"},
 	}}
 	_, suppressed := cfg.apply([]model.Finding{
-		{CheckID: "nonhuman.app-broad-permissions", Resource: model.ResourceRef{Name: "acme-monitoring"}},
-		{CheckID: "nonhuman.app-broad-permissions", Resource: model.ResourceRef{Name: "some-other-app"}},
+		{CheckID: "nonhuman.app-dangerous-permissions", Resource: model.ResourceRef{Name: "acme-monitoring"}},
+		{CheckID: "nonhuman.app-dangerous-permissions", Resource: model.ResourceRef{Name: "some-other-app"}},
 	})
 	if len(suppressed) != 2 {
 		t.Fatalf("suppressed = %d, want 2", len(suppressed))
@@ -70,6 +70,35 @@ func TestIgnoreApply_FirstMatchSuppliesTheReason(t *testing.T) {
 	}
 	if suppressed[1].Reason != "blanket acceptance" {
 		t.Errorf("fallback rule reason = %q", suppressed[1].Reason)
+	}
+}
+
+// A rule naming a check that does not exist suppresses nothing while looking
+// like it does — from a typo, or from a check being split or renamed between
+// releases, which quietly un-accepts an accepted risk.
+func TestIgnoreUnknownChecks(t *testing.T) {
+	cfg := &ignoreConfig{Ignore: []ignoreRule{
+		{Check: "human.no-2fa"},                   // real
+		{Check: "nonhuman.app-broad-permissions"}, // split into two checks
+		{Check: "nonhuman.app-broad-permissions"}, // repeat → reported once
+		{Check: "teams.repo-no-owning-team"},      // real
+		{Check: "typo.does-not-exist"},            // typo
+	}}
+	got := cfg.unknownChecks()
+	want := []string{"nonhuman.app-broad-permissions", "typo.does-not-exist"}
+	if len(got) != len(want) {
+		t.Fatalf("unknown = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("unknown[%d] = %q, want %q (file order, deduped)", i, got[i], want[i])
+		}
+	}
+
+	// A config referencing only real checks is silent.
+	clean := &ignoreConfig{Ignore: []ignoreRule{{Check: "human.no-2fa"}}}
+	if u := clean.unknownChecks(); len(u) != 0 {
+		t.Errorf("clean config reported %v", u)
 	}
 }
 

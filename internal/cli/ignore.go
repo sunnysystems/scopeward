@@ -6,6 +6,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/sunnysystems/scopeward/internal/check"
 	"github.com/sunnysystems/scopeward/internal/model"
 	"github.com/sunnysystems/scopeward/internal/report"
 )
@@ -56,6 +57,28 @@ func loadIgnore(explicit string) (*ignoreConfig, string, error) {
 		}
 	}
 	return &cfg, path, nil
+}
+
+// unknownChecks returns the check IDs referenced by rules that no registered
+// check answers to, in file order.
+//
+// A rule naming a check that does not exist is dead config: it suppresses
+// nothing and looks like it does. That happens from a typo, and from a check
+// being split or renamed between releases — in which case the operator's
+// accepted risk has quietly stopped being accepted. Worth a warning rather than
+// an error: an unknown ID is never dangerous by itself, and failing the run
+// would be a poor trade for a stale line in a config file.
+func (cfg *ignoreConfig) unknownChecks() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, r := range cfg.Ignore {
+		if _, ok := check.Meta(r.Check); ok || seen[r.Check] {
+			continue
+		}
+		seen[r.Check] = true
+		out = append(out, r.Check)
+	}
+	return out
 }
 
 // apply partitions findings into those kept and those suppressed by the rules.

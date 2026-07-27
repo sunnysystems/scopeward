@@ -44,10 +44,11 @@ var checkCategory = map[string]string{
 	"nonhuman.org-role-grant":    "Access management",
 
 	// Non-human credentials — apps, PATs, deploy keys.
-	"nonhuman.app-broad-permissions":   "Non-human credentials",
-	"nonhuman.classic-pat-broad-scope": "Non-human credentials",
-	"nonhuman.pat-no-expiry":           "Non-human credentials",
-	"nonhuman.deploy-key-write":        "Non-human credentials",
+	"nonhuman.app-inventory":             "Non-human credentials",
+	"nonhuman.app-dangerous-permissions": "Non-human credentials",
+	"nonhuman.classic-pat-broad-scope":   "Non-human credentials",
+	"nonhuman.pat-no-expiry":             "Non-human credentials",
+	"nonhuman.deploy-key-write":          "Non-human credentials",
 
 	// Identity & 2FA — human accounts, SSO, two-factor, offboarding.
 	"account.no-2fa":              "Identity & 2FA",

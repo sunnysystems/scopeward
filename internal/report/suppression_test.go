@@ -18,7 +18,7 @@ func suppressedAudit() Audit {
 	a.Suppressed = []Suppression{
 		{
 			Finding: model.Finding{
-				CheckID: "nonhuman.app-broad-permissions", Title: "acme-monitoring holds write permissions",
+				CheckID: "nonhuman.app-dangerous-permissions", Title: "acme-monitoring holds write permissions",
 				Severity: model.SevMedium, Axis: model.AxisNonHuman,
 				Resource: model.ResourceRef{Type: "app", Name: "acme-monitoring"},
 			},
