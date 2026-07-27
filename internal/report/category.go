@@ -25,6 +25,7 @@ var checkCategory = map[string]string{
 
 	// Supply chain security — Actions workflows, runners, tokens.
 	"supplychain.unpinned-action":          "Supply chain security",
+	"supplychain.internal-unpinned-action": "Supply chain security",
 	"supplychain.pull-request-target":      "Supply chain security",
 	"nonhuman.actions-policy-open":         "Supply chain security",
 	"nonhuman.actions-token-write-default": "Supply chain security",

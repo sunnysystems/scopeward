@@ -189,7 +189,7 @@ func (d DependabotAlertSummary) Total() int { return d.Critical + d.High + d.Med
 // WorkflowIssue is a supply-chain concern found in a repo's Actions workflow.
 type WorkflowIssue struct {
 	File   string `json:"file"`
-	Kind   string `json:"kind"`   // "unpinned-action" | "pull-request-target"
+	Kind   string `json:"kind"`   // "unpinned-action" | "internal-unpinned-action" | "pull-request-target"
 	Detail string `json:"detail"` // e.g. the action reference
 }
 

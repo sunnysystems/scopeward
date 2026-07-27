@@ -56,7 +56,7 @@ func fetchWorkflowIssues(ctx context.Context, client *ghclient.Client, org, repo
 				content = string(decoded)
 			}
 		}
-		issues = append(issues, scanWorkflow(item.Name, content)...)
+		issues = append(issues, scanWorkflow(item.Name, content, org)...)
 	}
 	return issues, nil
 }
@@ -65,9 +65,13 @@ func isWorkflowFile(name string) bool {
 	return strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")
 }
 
-// scanWorkflow inspects one workflow's text for supply-chain issues. It is pure
+// scanWorkflow inspects one workflow's text for supply-chain issues. owner is the
+// repository's owner (the org, or the user in --me mode); references to that same
+// owner — typically an internal reusable workflow tracked by branch — sit inside
+// the caller's own trust boundary, so they are recorded as
+// "internal-unpinned-action" rather than reported as third-party risk. It is pure
 // (no I/O) so it can be unit-tested directly.
-func scanWorkflow(file, content string) []model.WorkflowIssue {
+func scanWorkflow(file, content, owner string) []model.WorkflowIssue {
 	var issues []model.WorkflowIssue
 
 	for _, m := range usesRe.FindAllStringSubmatch(content, -1) {
@@ -80,13 +84,19 @@ func scanWorkflow(file, content string) []model.WorkflowIssue {
 			continue // no version specified (uncommon)
 		}
 		action, version := ref[:at], ref[at+1:]
-		owner, _, _ := strings.Cut(action, "/")
-		if officialActionOwners[owner] {
+		refOwner, _, _ := strings.Cut(action, "/")
+		if officialActionOwners[refOwner] {
 			continue
 		}
-		if !shaRe.MatchString(version) {
-			issues = append(issues, model.WorkflowIssue{File: file, Kind: "unpinned-action", Detail: ref})
+		if shaRe.MatchString(version) {
+			continue
 		}
+		kind := "unpinned-action"
+		// GitHub logins are case-insensitive, so compare them that way.
+		if owner != "" && strings.EqualFold(refOwner, owner) {
+			kind = "internal-unpinned-action"
+		}
+		issues = append(issues, model.WorkflowIssue{File: file, Kind: kind, Detail: ref})
 	}
 
 	if hasUnsafeTrigger(content) {
