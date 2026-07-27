@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sunnysystems/scopeward/internal/model"
+	"github.com/sunnysystems/scopeward/internal/score"
 )
 
 func bptr(b bool) *bool { return &b }
@@ -132,15 +133,20 @@ func TestWeakBranchProtection(t *testing.T) {
 	}
 }
 
-func TestBypassableBranchProtection(t *testing.T) {
+func bypassSnapshot(members int) *model.Snapshot {
 	snap := model.NewSnapshot("acme")
-	snap.Members = make([]model.Member, 2)
+	snap.Members = make([]model.Member, members)
 	snap.Repos = []model.Repo{
 		// Protection that looks clean to every other branch check, but admins bypass it.
 		{Name: "bypassable", BranchReqPRReview: bptr(true), BranchAllowForcePush: bptr(false), BranchEnforceAdmins: bptr(false)},
 		{Name: "enforced", BranchReqPRReview: bptr(true), BranchAllowForcePush: bptr(false), BranchEnforceAdmins: bptr(true)},
 		{Name: "ruleset", BranchEnforceAdmins: nil}, // not assessed → skip, never assumed off
 	}
+	return snap
+}
+
+func TestBypassableBranchProtection(t *testing.T) {
+	snap := bypassSnapshot(breakGlassThreshold) // big enough to lose the bypass
 	got := bypassableBranchProtection{}.Run(context.Background(), snap)
 	if len(got) != 1 {
 		t.Fatalf("want 1 finding (bypassable), got %d (%+v)", len(got), got)
@@ -157,6 +163,67 @@ func TestBypassableBranchProtection(t *testing.T) {
 	// weakBranchProtection must stay silent here — the rules themselves are fine.
 	if weak := (weakBranchProtection{}).Run(context.Background(), snap); len(weak) != 0 {
 		t.Errorf("weak-branch-protection should not fire on admin bypass, got %+v", weak)
+	}
+}
+
+// Below the threshold the admin bypass is what scopeward's own suggested fix
+// configures, so reporting it as a defect would penalize following the advice.
+// It stays listed at info — visible, zero penalty, and with no command attached.
+func TestBypassableBranchProtection_SmallTeamIsInventory(t *testing.T) {
+	got := bypassableBranchProtection{}.Run(context.Background(), bypassSnapshot(breakGlassThreshold-1))
+	if len(got) != 1 {
+		t.Fatalf("want 1 finding, got %d (%+v)", len(got), got)
+	}
+	if got[0].Severity != model.SevInfo {
+		t.Errorf("severity = %v, want info for a team below the threshold", got[0].Severity)
+	}
+	if got[0].GHFix != "" {
+		t.Errorf("fix = %q, want none: the tool must not suggest undoing what it recommends", got[0].GHFix)
+	}
+	if score.Grade(got).Penalty != 0 {
+		t.Error("an expected break-glass path must not cost penalty")
+	}
+
+	// --solo means the same thing regardless of member count.
+	solo := bypassSnapshot(50)
+	solo.Solo = true
+	if s := (bypassableBranchProtection{}).Run(context.Background(), solo); s[0].Severity != model.SevInfo {
+		t.Errorf("--solo severity = %v, want info", s[0].Severity)
+	}
+}
+
+// The suggested branch-protection command and the bypass check have to agree: a
+// configuration the fix produces must never be reported as a defect, at any size.
+func TestSuggestedProtectionIsNotSelfContradictory(t *testing.T) {
+	for _, members := range []int{0, 1, 2, breakGlassThreshold - 1, breakGlassThreshold, 20} {
+		snap := model.NewSnapshot("acme")
+		snap.Members = make([]model.Member, members)
+		snap.Repos = []model.Repo{{Name: "api", DefaultBranch: "main", DefaultBranchProtected: bptr(false)}}
+
+		found := unprotectedDefaultBranch{}.Run(context.Background(), snap)
+		if len(found) != 1 || found[0].GHFix == "" {
+			t.Fatalf("%d members: expected a suggested fix, got %+v", members, found)
+		}
+		suggestsBypass := strings.Contains(found[0].GHFix, `"enforce_admins":false`)
+
+		// Now the repo as the fix would leave it.
+		applied := model.NewSnapshot("acme")
+		applied.Members = snap.Members
+		applied.Repos = []model.Repo{{
+			Name: "api", DefaultBranch: "main", DefaultBranchProtected: bptr(true),
+			BranchReqPRReview:    bptr(strings.Contains(found[0].GHFix, `"required_approving_review_count":1`)),
+			BranchAllowForcePush: bptr(false),
+			BranchEnforceAdmins:  bptr(!suggestsBypass),
+		}}
+		for _, f := range append(
+			weakBranchProtection{}.Run(context.Background(), applied),
+			bypassableBranchProtection{}.Run(context.Background(), applied)...,
+		) {
+			if f.Severity > model.SevInfo {
+				t.Errorf("%d members: applying the suggested fix still yields %s (%s)",
+					members, f.CheckID, f.Severity)
+			}
+		}
 	}
 }
 
