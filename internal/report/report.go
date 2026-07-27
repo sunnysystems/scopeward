@@ -17,12 +17,27 @@ type Audit struct {
 	Score    score.Score
 	// Suppressed lists findings hidden by the ignore config (.scopeward.yml); they
 	// do not count toward the score or --fail-on.
-	Suppressed []model.Finding
+	Suppressed []Suppression
+	// UnsuppressedScore is the score the org would have if nothing were
+	// suppressed. Set only when Suppressed is non-empty, so the discount an ignore
+	// config buys is always visible next to the number it moved.
+	UnsuppressedScore score.Score
 
 	// Baseline comparison (set when --baseline is used).
 	HasBaseline   bool
 	NewKeys       map[string]bool // FindingKey of findings absent from the baseline
 	ResolvedCount int             // baseline findings no longer present
+}
+
+// Suppression is a finding hidden by an ignore rule, carrying the reason that
+// rule records. Documented risk acceptance is the whole point of an ignore
+// mechanism in a governance tool: a suppression with a stated justification is
+// the artifact an auditor asks for, while one without is indistinguishable from
+// a rule that exists to make the number look better. The reason therefore travels
+// with the finding into every output rather than staying in the YAML file.
+type Suppression struct {
+	Finding model.Finding `json:"finding"`
+	Reason  string        `json:"reason,omitempty"` // empty = the rule documented nothing
 }
 
 // FindingKey is the stable identity of a finding for baseline comparison: the

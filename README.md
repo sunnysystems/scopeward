@@ -134,6 +134,24 @@ ignore:
     reason: intentional external docs contributor
 ```
 
+Every suppression is reported back under **Accepted risks**, with its `reason`
+and the score the suppressions bought:
+
+```text
+  Accepted risks
+    · dana is an outside collaborator
+      acme-co/public-docs · human.outside-collaborator
+      accepted: intentional external docs contributor
+    1 suppressed · score without them: 75 B (currently 81 B)
+```
+
+`reason` is optional but recommended — a rule without one is reported as
+*no reason recorded*, since documented risk acceptance is the point of the
+mechanism. The reason also reaches `--format json` (with an
+`unsuppressed_score`), the HTML report, and `--format sarif` (as a native
+`suppressions` entry, so dashboards show accepted risks with their
+justification).
+
 ## Token scopes
 
 Designed for an **organization owner** token for full coverage. Recommended

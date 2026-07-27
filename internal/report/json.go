@@ -19,9 +19,13 @@ type jsonPayload struct {
 	Score        score.Score        `json:"score"`
 	Findings     []model.Finding    `json:"findings"`
 	NotEvaluated []check.Skipped    `json:"not_evaluated,omitempty"`
-	Suppressed   []model.Finding    `json:"suppressed,omitempty"`
-	Baseline     *baselineSummary   `json:"baseline,omitempty"`
-	Coverage     []model.Coverage   `json:"coverage"`
+	Suppressed   []Suppression      `json:"suppressed,omitempty"`
+	// UnsuppressedScore is the score without the ignore config applied, present
+	// only when something was suppressed. It lets CI audit the acceptances
+	// themselves rather than only the number they produced.
+	UnsuppressedScore *score.Score     `json:"unsuppressed_score,omitempty"`
+	Baseline          *baselineSummary `json:"baseline,omitempty"`
+	Coverage          []model.Coverage `json:"coverage"`
 }
 
 type baselineSummary struct {
@@ -39,6 +43,10 @@ func JSON(out io.Writer, a Audit) error {
 		NotEvaluated: a.Report.Skipped,
 		Suppressed:   a.Suppressed,
 		Coverage:     a.Snapshot.Coverage.All(),
+	}
+	if len(a.Suppressed) > 0 {
+		u := a.UnsuppressedScore
+		payload.UnsuppressedScore = &u
 	}
 	if a.HasBaseline {
 		payload.Baseline = &baselineSummary{New: len(a.NewKeys), Resolved: a.ResolvedCount}

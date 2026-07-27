@@ -11,11 +11,14 @@ import (
 // SARIF writes the findings as a SARIF 2.1.0 log, which security dashboards and
 // GitHub code scanning can ingest. Each check becomes a rule; each finding a
 // result whose level maps from severity.
+// Suppressed findings are emitted too, carrying SARIF's native suppressions
+// object so a dashboard shows them as accepted risks with their justification
+// rather than not showing them at all.
 func SARIF(out io.Writer, a Audit) error {
 	rules := map[string]sarifRule{}
 	var results []sarifResult
 
-	for _, f := range a.Report.Findings {
+	result := func(f model.Finding) sarifResult {
 		if _, ok := rules[f.CheckID]; !ok {
 			rules[f.CheckID] = sarifRule{
 				ID:               f.CheckID,
@@ -25,7 +28,7 @@ func SARIF(out io.Writer, a Audit) error {
 				Properties:       map[string]any{"axis": string(f.Axis)},
 			}
 		}
-		results = append(results, sarifResult{
+		return sarifResult{
 			RuleID:  f.CheckID,
 			Level:   sarifLevel(f.Severity),
 			Message: sarifText{Text: f.Title},
@@ -33,7 +36,19 @@ func SARIF(out io.Writer, a Audit) error {
 				"severity": f.Severity.String(),
 				"resource": f.Resource.Name,
 			},
-		})
+		}
+	}
+
+	for _, f := range a.Report.Findings {
+		results = append(results, result(f))
+	}
+	for _, s := range a.Suppressed {
+		r := result(s.Finding)
+		// kind "external": the acceptance lives in .scopeward.yml, not in the
+		// audited source. An empty justification is emitted as-is, so a rule that
+		// documented nothing stays visibly undocumented downstream.
+		r.Suppressions = []sarifSuppression{{Kind: "external", Justification: s.Reason}}
+		results = append(results, r)
 	}
 
 	ruleList := make([]sarifRule, 0, len(rules))
@@ -99,10 +114,15 @@ type sarifRule struct {
 	Properties       map[string]any `json:"properties,omitempty"`
 }
 type sarifResult struct {
-	RuleID     string         `json:"ruleId"`
-	Level      string         `json:"level"`
-	Message    sarifText      `json:"message"`
-	Properties map[string]any `json:"properties,omitempty"`
+	RuleID       string             `json:"ruleId"`
+	Level        string             `json:"level"`
+	Message      sarifText          `json:"message"`
+	Properties   map[string]any     `json:"properties,omitempty"`
+	Suppressions []sarifSuppression `json:"suppressions,omitempty"`
+}
+type sarifSuppression struct {
+	Kind          string `json:"kind"` // "external" | "inSource"
+	Justification string `json:"justification"`
 }
 type sarifText struct {
 	Text string `json:"text"`
