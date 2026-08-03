@@ -262,19 +262,31 @@ func TestBypassableBranchProtection_SmallTeamIsInventory(t *testing.T) {
 		t.Error("an expected break-glass path must not cost penalty")
 	}
 
-	// --solo means the same thing regardless of member count.
+	// --solo must NOT reach this check. The flag means "do not suggest a fix
+	// requiring a second approver" — letting it also downgrade a finding would let
+	// a command-line switch silently move the score on an org large enough to
+	// enforce, which is the discount ignore rules were made visible to prevent.
 	solo := bypassSnapshot(50)
 	solo.Solo = true
-	if s := (bypassableBranchProtection{}).Run(context.Background(), solo); s[0].Severity != model.SevInfo {
-		t.Errorf("--solo severity = %v, want info", s[0].Severity)
+	if s := (bypassableBranchProtection{}).Run(context.Background(), solo); s[0].Severity != model.SevMedium {
+		t.Errorf("--solo severity = %v, want medium: a 50-member org has the bench to enforce, flag or no flag", s[0].Severity)
 	}
 }
 
 // The suggested branch-protection command and the bypass check have to agree: a
 // configuration the fix produces must never be reported as a defect, at any size.
 func TestSuggestedProtectionIsNotSelfContradictory(t *testing.T) {
-	for _, members := range []int{0, 1, 2, breakGlassThreshold - 1, breakGlassThreshold, 20} {
+	for _, tc := range []struct {
+		members int
+		solo    bool
+	}{{0, false}, {1, false}, {2, false}, {breakGlassThreshold - 1, false},
+		{breakGlassThreshold, false}, {20, false},
+		// --solo must not make the suggestion and the checks disagree either.
+		{2, true}, {20, true},
+	} {
+		members := tc.members
 		snap := model.NewSnapshot("acme")
+		snap.Solo = tc.solo
 		snap.Members = make([]model.Member, members)
 		snap.Repos = []model.Repo{{Name: "api", DefaultBranch: "main", DefaultBranchProtected: bptr(false)}}
 
@@ -284,8 +296,11 @@ func TestSuggestedProtectionIsNotSelfContradictory(t *testing.T) {
 		}
 		suggestsBypass := strings.Contains(found[0].GHFix, `"enforce_admins":false`)
 
-		// Now the repo as the fix would leave it.
+		// Now the repo as the fix would leave it, assessed under the same flags —
+		// --solo changes what you are told to do, so comparing across it would be
+		// comparing two different questions.
 		applied := model.NewSnapshot("acme")
+		applied.Solo = snap.Solo
 		applied.Members = snap.Members
 		applied.Repos = []model.Repo{{
 			Name: "api", DefaultBranch: "main", DefaultBranchProtected: bptr(true),

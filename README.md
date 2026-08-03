@@ -201,7 +201,7 @@ required:
 
 | Members | Suggested protection |
 |---|---|
-| 1 (or `--solo`) | pull request required, no approving review, admin bypass kept |
+| 1 | pull request required, no approving review, admin bypass kept |
 | 2–4 | pull request + 1 approving review, admin bypass kept |
 | 5+ | pull request + 1 approving review, enforced on admins too |
 
@@ -210,6 +210,12 @@ team with no way to land an urgent fix when one person is away. So scopeward
 keeps the owner break-glass path, reports it as an `info` (zero penalty) so the
 exposure stays visible, and tells you to revisit it as the team grows — rather
 than recommending a lockout and then flagging you for the workaround.
+
+`--solo` affects only the *approving review* column: it never changes a finding's
+severity. A flag that moved the score would be an invisible discount, which is
+exactly what `.scopeward.yml` reasons exist to prevent. Whether the admin bypass
+is expected is decided by member count alone — and a genuine solo account is
+below the threshold anyway.
 
 Protection quality is assessed for **both** mechanisms — classic branch
 protection and rulesets — by reading each branch's effective rules, so a
