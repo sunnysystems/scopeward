@@ -1,0 +1,59 @@
+name: Check accuracy (false positive / false negative)
+description: A check flagged something that is fine, or missed something that is not
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A check that reports the wrong thing is the most damaging bug this tool
+        has: a false positive burns the adopter's trust, and a false negative
+        hands them a clean bill of health they did not earn. These get priority.
+
+        Redact org, repo and team names — the finding's *shape* is what matters
+        here, not its subject.
+
+  - type: input
+    id: check-id
+    attributes:
+      label: Check ID
+      description: The stable ID, e.g. `supplychain.unpinned-action`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Which way is it wrong?
+      options:
+        - False positive — it flagged something that is correct as configured
+        - False negative — it stayed silent on something that is genuinely wrong
+        - Wrong severity or penalty
+        - Remediation advice is wrong or would not work
+    validations:
+      required: true
+
+  - type: textarea
+    id: reality
+    attributes:
+      label: What the configuration actually is
+      description: >-
+        The real state of the resource, and why the finding does not match it.
+        Enough detail to reconstruct the case in a `model.Snapshot` literal for
+        a test.
+    validations:
+      required: true
+
+  - type: textarea
+    id: finding
+    attributes:
+      label: The finding as reported
+      description: The relevant lines of the report, redacted.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: scopeward v0.1.0
+    validations:
+      required: true

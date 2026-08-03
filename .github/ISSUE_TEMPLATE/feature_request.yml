@@ -1,0 +1,48 @@
+name: Feature request
+description: A new check, a new output, or a change to how scopeward works
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth knowing before you write: scopeward is local-first, read-only,
+        never persists the token, and ships as a single zero-config binary.
+        Proposals that need a hosted component, a write scope or telemetry are
+        out of scope by design rather than by backlog order.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The governance gap
+      description: >-
+        What can go wrong in an organization today that scopeward would not
+        tell you about? Describe the exposure, not the implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What scopeward should do
+      description: >-
+        For a new check: what it flags, at what severity, and what the
+        remediation would be. For output or UX: what the terminal should show.
+    validations:
+      required: true
+
+  - type: textarea
+    id: signal
+    attributes:
+      label: Where the data comes from
+      description: >-
+        The API endpoint or field, and the token scope or plan tier it needs.
+        If it is only available on a paid tier, say so — that decides whether
+        the check degrades to *not evaluated* rather than failing.
+
+  - type: textarea
+    id: false-positives
+    attributes:
+      label: When would this be wrong?
+      description: >-
+        The legitimate setups that would trip it. A check that cannot answer
+        this tends to become noise adopters learn to ignore.

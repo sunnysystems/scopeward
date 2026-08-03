@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/sunnysystems/scopeward/security/advisories/new
+    about: >-
+      Report privately, never as a public issue. A break in the read-only,
+      never-persist-the-token or local-first guarantees belongs here. See
+      SECURITY.md for the full scope.
