@@ -9,8 +9,15 @@
 .idea/
 .vscode/
 
-# Local audit output (never commit — may contain org data)
-/fixes-*.sh
-/*.html
-/baseline.json
-/*.sarif
+# Local audit output (never commit — may contain org data).
+# Unanchored and recursive on purpose: the README documents `--fix-script
+# fixes.sh` and `--html report.html`, and the output path is a user-chosen
+# argument, so root-anchored patterns miss both the documented names and any
+# subdirectory. No pattern covers an arbitrary path — see issue #56.
+fixes*.sh
+**/*.html
+**/*.sarif
+**/baseline.json
+
+# …except checked-in test fixtures, which belong in the repository.
+!internal/report/testdata/**

@@ -101,6 +101,12 @@ scopeward tui --org my-org             # browse findings in an interactive TUI
 | `--baseline prior.json [--new-only]` | diff against a prior run; report or fail only on *new* findings |
 | `--fix-script fixes.sh` | write suggested `gh` remediation commands, **all commented out**; nothing runs until you uncomment. The header states which token scopes the commands need and which your token is missing, and each block names its own scope |
 
+> **Keep the output out of git.** A fix script or report carries your org login,
+> repository names, team slugs and an ordered map of where you are weakest — in
+> a public repo that is a targeting document. The paths above are ignored by
+> this repository's `.gitignore`; if you write somewhere else, ignore it there
+> too.
+
 ### Exit codes
 
 | Code | Meaning |
