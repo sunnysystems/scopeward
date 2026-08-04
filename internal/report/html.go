@@ -27,6 +27,7 @@ type htmlView struct {
 	GradeColor       string
 	ScoreBasis       string // the two axes and the per-repo rate the number is built from
 	ScoreTransition  string // what the previous scoring model would have said
+	ScoreEstimate    string // the part of the penalty priced rather than measured
 	Dashboard        dashboardView
 	FindingCount     int
 	AxisCount        int
@@ -163,6 +164,7 @@ func buildHTMLView(a Audit) htmlView {
 		GradeColor:      gradeColor(a.Score.Grade),
 		ScoreBasis:      scoreBasis(a.Score),
 		ScoreTransition: scoreTransition(a.Score),
+		ScoreEstimate:   scoreEstimate(a.Score),
 		Dashboard:       buildDashboard(a),
 		FindingCount:    len(a.Report.Findings),
 		CheckCount:      len(a.Report.Findings) + len(a.Report.Skipped),

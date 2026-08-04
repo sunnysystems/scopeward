@@ -77,6 +77,12 @@ type Score struct {
 	PerRepo     float64 `json:"per_repo"`
 	ActiveRepos int     `json:"active_repos,omitempty"`
 
+	// Estimated is how much of Penalty is priced from what a disabled control is
+	// estimated to hide, rather than measured. Disclosed because a score partly
+	// built on an estimate has to say so: a reader comparing two runs needs to
+	// know which part of the number came from evidence.
+	Estimated int `json:"estimated,omitempty"`
+
 	BySeverity map[model.Severity]int `json:"by_severity"` // finding counts
 	ByAxis     map[model.Axis]int     `json:"by_axis"`     // normalized penalty per axis
 	// ByKind splits penalty into the two questions the score answers: coverage
@@ -103,12 +109,17 @@ func Grade(findings []model.Finding, sc Scale) Score {
 		factor = float64(ReferenceRepos) / float64(sc.ActiveRepos)
 	}
 
-	var absolute, normalized, repoAbsolute float64
+	// What a disabled monitoring control should cost, learned from the org's own
+	// instrumented repositories. See unknown.go: this is what stops the score
+	// from falling when an operator turns a control on.
+	estimates := estimateUnknown(findings, sc.ActiveRepos)
+
+	var absolute, normalized, repoAbsolute, estimated float64
 	byAxis := map[model.Axis]float64{}
 	byKind := map[model.Kind]float64{}
 
 	for _, f := range findings {
-		w := float64(severityWeight[f.Severity])
+		w, est := pricedWeight(f, estimates)
 		s.BySeverity[f.Severity]++
 		absolute += w
 
@@ -117,10 +128,12 @@ func Grade(findings []model.Finding, sc Scale) Score {
 		// add up is worse than no breakdown: it invites the reader to trust an
 		// arithmetic that is not there.
 		scaled := w
+		scaledEst := est
 		if isRepoScoped(f) {
 			repoAbsolute += w
-			scaled = w * factor
+			scaled, scaledEst = w*factor, est*factor
 		}
+		estimated += scaledEst
 		normalized += scaled
 		byAxis[f.Axis] += scaled
 		byKind[f.Kind] += scaled
@@ -133,6 +146,7 @@ func Grade(findings []model.Finding, sc Scale) Score {
 		s.PerRepo = repoAbsolute / float64(sc.ActiveRepos)
 	}
 
+	s.Estimated = int(math.Round(estimated))
 	s.PenaltyAbsolute = int(math.Round(absolute))
 	s.Value = decay(normalized)
 	s.ValueAbsolute = decay(absolute)
