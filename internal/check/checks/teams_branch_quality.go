@@ -28,6 +28,7 @@ func (weakBranchProtection) Meta() check.CheckMeta {
 		Title:           "Weak branch protection",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataBranchProtection},
 		Description:     "Default branches protected without requiring review or while allowing force-pushes.",
 	}
@@ -111,6 +112,7 @@ func (bypassableBranchProtection) Meta() check.CheckMeta {
 		Title:           "Branch protection does not apply to admins",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataBranchProtection},
 		Description:     "Default branches whose protection exempts administrators, who can then push directly.",
 	}

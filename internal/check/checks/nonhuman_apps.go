@@ -64,6 +64,7 @@ func (appInventory) Meta() check.CheckMeta {
 		Title:           "Installed GitHub Apps",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevInfo,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataAppInstallations},
 		Description:     "Inventory of installed GitHub Apps and the elevated permissions each holds.",
 	}
@@ -126,6 +127,7 @@ func (appDangerousPermissions) Meta() check.CheckMeta {
 		Title:           "GitHub Apps with organization-level power",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataAppInstallations},
 		Description:     "Installed GitHub Apps that can change org settings, membership, secrets, runners, or workflow files.",
 	}

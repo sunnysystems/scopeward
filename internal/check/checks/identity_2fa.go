@@ -21,6 +21,7 @@ func (no2FA) Meta() check.CheckMeta {
 		Title:           "Members without 2FA",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataMembers, model.DataMember2FA},
 		Description:     "Org members whose account has two-factor authentication disabled.",
 	}
@@ -56,6 +57,7 @@ func (orgNo2FAEnforcement) Meta() check.CheckMeta {
 		Title:           "Org-wide 2FA not enforced",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataOrg},
 		Description:     "Whether the organization requires two-factor authentication for all members.",
 	}

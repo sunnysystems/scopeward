@@ -13,9 +13,17 @@ var registry = map[string]Check{}
 // Register adds a check to the global registry. It panics on a duplicate ID,
 // which can only happen at init time and indicates a programming error.
 func Register(c Check) {
-	id := c.Meta().ID
+	meta := c.Meta()
+	id := meta.ID
 	if id == "" {
 		panic("check: registered check has empty ID")
+	}
+	// Deliberately a panic and not a default. Kind decides which axis a finding
+	// lands on, so an unclassified check would move the score quietly and in a
+	// direction nobody chose — the exact failure #39 exists to prevent. Failing
+	// at init means a new check cannot be merged without someone deciding.
+	if meta.Kind != KindCoverage && meta.Kind != KindDebt {
+		panic(fmt.Sprintf("check %q must declare Kind (KindCoverage or KindDebt); see check.Kind", id))
 	}
 	if _, dup := registry[id]; dup {
 		panic(fmt.Sprintf("check: duplicate check ID %q", id))

@@ -29,6 +29,7 @@ func (copilotSeatInactive) Meta() check.CheckMeta {
 		Title:           "Inactive Copilot seats",
 		Axis:            model.AxisAIAgents,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCopilotSeats},
 		Description:     "Assigned Copilot seats never used or idle for over 90 days.",
 	}
@@ -79,6 +80,7 @@ func (copilotSeatNonMember) Meta() check.CheckMeta {
 		Title:           "Copilot seats for non-members",
 		Axis:            model.AxisAIAgents,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCopilotSeats, model.DataMembers},
 		Description:     "Copilot seats assigned to accounts that are not organization members.",
 	}

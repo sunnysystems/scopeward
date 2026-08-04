@@ -20,6 +20,7 @@ func (openSecretAlerts) Meta() check.CheckMeta {
 		Title:           "Open secret-scanning alerts",
 		Axis:            model.AxisCodeSecurity,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOpenSecretAlerts},
 		Description:     "Repositories with unresolved secret-scanning alerts (committed secrets).",
 		// A committed secret is exposed whether or not the repo is read-only.
@@ -53,10 +54,13 @@ func (c openSecretAlerts) Run(_ context.Context, s *model.Snapshot) []model.Find
 			fix = "Rotate these credentials. The repository being archived is not a mitigation — the secret is live wherever it is used, and revoking it there is the only fix. Deleting the repository would hide the alert without invalidating anything."
 		}
 		out = append(out, model.Finding{
-			CheckID:     c.Meta().ID,
-			Title:       title,
-			Severity:    model.SevHigh,
-			Axis:        model.AxisCodeSecurity,
+			CheckID:  c.Meta().ID,
+			Title:    title,
+			Severity: model.SevHigh,
+			Axis:     model.AxisCodeSecurity,
+			// Every leaked credential has to be rotated individually, so the count
+			// is the work — and today it reaches the title but not the weight (#31).
+			Volume:      n,
 			Resource:    repoRef(s.Org.Login, r),
 			Evidence:    map[string]any{"repo": r.Name, "open_alerts": n, "archived": r.Archived},
 			Description: desc,

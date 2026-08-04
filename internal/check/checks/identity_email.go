@@ -23,6 +23,7 @@ func (emailOutsideCompany) Meta() check.CheckMeta {
 		Title:           "SSO identity outside company domain",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataSAMLIdentities, model.DataCompanyDomains},
 		Description:     "Members whose SAML/SSO identity email is not on a company domain.",
 	}

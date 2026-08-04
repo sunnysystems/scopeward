@@ -19,6 +19,7 @@ func (orgSecretVisibleAll) Meta() check.CheckMeta {
 		Title:           "Org secrets exposed to all repos",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOrgSecrets},
 		Description:     "Organization Actions secrets available to every repository (visibility: all).",
 	}

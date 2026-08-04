@@ -26,6 +26,7 @@ func (ciVariableUnprotected) Meta() check.CheckMeta {
 		Title:           "Unprotected CI/CD secret variables",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCIVariables},
 		Description:     "Masked CI/CD variables that are not protected, so they are exposed to pipelines on unprotected branches and tags.",
 	}
@@ -73,6 +74,7 @@ func (ciRunnerUnprotected) Meta() check.CheckMeta {
 		Title:           "Runners usable from unprotected refs",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCIRunners},
 		Description:     "CI runners not restricted to protected branches/tags; shared runners in this state run untrusted code from any project.",
 	}
@@ -126,6 +128,7 @@ func (ciJobTokenOpen) Meta() check.CheckMeta {
 		Title:           "CI_JOB_TOKEN allowlist disabled",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataJobTokenScope},
 		Description:     "Projects with the CI_JOB_TOKEN inbound allowlist disabled, so any project's job token can access them.",
 	}

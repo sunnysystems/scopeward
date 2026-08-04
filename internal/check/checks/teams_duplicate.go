@@ -41,6 +41,7 @@ func (duplicateRoster) Meta() check.CheckMeta {
 		Title:           "Teams with duplicate rosters",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataTeamMembers, model.DataTeamRepos},
 		Description:     "Two teams holding effectively the same members while both grant repository access.",
 	}

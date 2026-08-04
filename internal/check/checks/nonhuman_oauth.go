@@ -22,6 +22,7 @@ func (oauthAppTrusted) Meta() check.CheckMeta {
 		Title:           "Trusted or public OAuth apps",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOAuthApps},
 		Description:     "OAuth applications that skip the user consent screen (trusted) or cannot hold a client secret (non-confidential).",
 	}

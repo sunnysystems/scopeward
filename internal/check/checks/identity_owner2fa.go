@@ -20,6 +20,7 @@ func (ownerWithout2FA) Meta() check.CheckMeta {
 		Title:           "Owners without 2FA",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevCritical,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataMembers, model.DataMemberRoles, model.DataMember2FA},
 		Description:     "Organization owners whose account has two-factor authentication disabled.",
 	}

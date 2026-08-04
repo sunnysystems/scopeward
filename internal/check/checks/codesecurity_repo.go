@@ -19,6 +19,7 @@ func (repoNoPushProtection) Meta() check.CheckMeta {
 		Title:           "Repos without push protection",
 		Axis:            model.AxisCodeSecurity,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataRepoSecurity},
 		Description:     "Repositories where secret-scanning push protection is not enabled.",
 	}

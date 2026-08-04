@@ -23,6 +23,7 @@ func (actionsPolicyOpen) Meta() check.CheckMeta {
 		Title:           "Unrestricted Actions policy",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataActionsPolicy},
 		Description:     "The org allows any action to run, including arbitrary third-party actions.",
 	}
@@ -56,6 +57,7 @@ func (selfHostedRunners) Meta() check.CheckMeta {
 		Title:           "Self-hosted runners",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataSelfHostedRunners},
 		Description:     "Org-level self-hosted Actions runners, which execute workflow code on your infrastructure.",
 	}
