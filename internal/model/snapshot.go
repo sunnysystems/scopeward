@@ -468,6 +468,11 @@ type Snapshot struct {
 	// OwningTeamProperty is the custom-property name expected to name a repo's
 	// owning team. Audit configuration; empty means "use the check default".
 	OwningTeamProperty string `json:"-"`
+	// DuplicateRosterSimilarity is the Jaccard threshold at which two teams count
+	// as holding the same people. Audit configuration; zero means "use the check
+	// default". How much overlap is redundancy rather than legitimate structure
+	// depends on how the org draws its teams, so it is an opinion the org can set.
+	DuplicateRosterSimilarity float64 `json:"-"`
 	// Solo forces single-developer mode: suggested branch-protection fixes never
 	// require an approving review (you cannot approve your own PR). Audit config.
 	Solo bool `json:"-"`
