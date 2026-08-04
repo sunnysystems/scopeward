@@ -20,7 +20,10 @@ import (
 
 	"github.com/sunnysystems/scopeward/internal/auth"
 	"github.com/sunnysystems/scopeward/internal/cache"
-	_ "github.com/sunnysystems/scopeward/internal/check/checks" // register all checks
+	// Imported for its init() side effect (registering every check); the named
+	// import also lets the flag default come from the check that owns it, rather
+	// than being restated here where the two could drift apart.
+	"github.com/sunnysystems/scopeward/internal/check/checks"
 	"github.com/sunnysystems/scopeward/internal/model"
 	"github.com/sunnysystems/scopeward/internal/progress"
 	"github.com/sunnysystems/scopeward/internal/provider"
@@ -51,18 +54,20 @@ type options struct {
 	companyDomains []string // email domains considered to belong to the org
 	staleAfterDays int      // days without a push before a repo is "stale"
 
-	owningTeamProperty string   // custom-property name expected to name a repo's owning team
-	solo               bool     // single-developer mode: suggested branch fixes never require a reviewer
-	configPath         string   // path to the ignore config; auto-detected if empty
-	quick              bool     // org-level only; skip the per-repo pass
-	maxRepos           int      // cap repos scanned in the per-repo pass (0 = no cap)
-	only               []string // run only these axes/check-IDs
-	skip               []string // exclude these axes/check-IDs
-	baseline           string   // prior JSON report to diff against
-	newOnly            bool     // with --baseline: keep only findings new since baseline
-	cache              bool     // use a disk ETag cache for conditional requests
-	refresh            bool     // with --cache: ignore and rewrite cached entries this run
-	fixScript          string   // write suggested gh fix commands (commented) to this path
+	owningTeamProperty  string  // custom-property name expected to name a repo's owning team
+	duplicateSimilarity float64 // roster overlap at which two teams count as duplicates
+
+	solo       bool     // single-developer mode: suggested branch fixes never require a reviewer
+	configPath string   // path to the ignore config; auto-detected if empty
+	quick      bool     // org-level only; skip the per-repo pass
+	maxRepos   int      // cap repos scanned in the per-repo pass (0 = no cap)
+	only       []string // run only these axes/check-IDs
+	skip       []string // exclude these axes/check-IDs
+	baseline   string   // prior JSON report to diff against
+	newOnly    bool     // with --baseline: keep only findings new since baseline
+	cache      bool     // use a disk ETag cache for conditional requests
+	refresh    bool     // with --cache: ignore and rewrite cached entries this run
+	fixScript  string   // write suggested gh fix commands (commented) to this path
 
 	exitCode int // set during the run; returned by Execute
 }
@@ -105,6 +110,7 @@ func Execute() int {
 	root.PersistentFlags().StringSliceVar(&opts.companyDomains, "company-domain", nil, "company email domain(s) for the SSO email check, e.g. mycompany.com (repeatable)")
 	root.PersistentFlags().IntVar(&opts.staleAfterDays, "stale-after-days", 365, "days without a push before a repository is flagged as stale")
 	root.PersistentFlags().StringVar(&opts.owningTeamProperty, "owning-team-property", defaultOwningTeamProperty, "org custom-property name expected to name each repo's owning team")
+	root.PersistentFlags().Float64Var(&opts.duplicateSimilarity, "duplicate-team-similarity", checks.DefaultDuplicateRosterSimilarity, "roster overlap (0-1) at which two teams are reported as duplicates")
 	root.PersistentFlags().BoolVar(&opts.solo, "solo", false, "single-developer mode: suggested branch-protection fixes require a PR but no approving review (you cannot approve your own PR)")
 	root.PersistentFlags().BoolVar(&opts.quick, "quick", false, "org-level checks only; skip the slower per-repo scan")
 	root.PersistentFlags().IntVar(&opts.maxRepos, "max-repos", 0, "cap how many repos the per-repo scan covers (0 = all)")

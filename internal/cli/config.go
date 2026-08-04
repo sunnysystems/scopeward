@@ -38,6 +38,14 @@ func configureAudit(snap *model.Snapshot, opts *options) {
 	}
 	snap.OwningTeamProperty = prop
 
+	// Out-of-range values fall back to the check default rather than erroring: a
+	// similarity above 1 can never match and one at or below 0 would pair every
+	// team with every other, and silently doing either would be worse than
+	// ignoring the flag.
+	if sim := opts.duplicateSimilarity; sim > 0 && sim <= 1 {
+		snap.DuplicateRosterSimilarity = sim
+	}
+
 	snap.Solo = opts.solo
 }
 
