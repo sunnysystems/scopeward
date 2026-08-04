@@ -16,10 +16,15 @@ type Organization struct {
 	// Owner-visible policy/security settings; nil = not visible to this token.
 	MembersCanCreatePublicRepos *bool `json:"members_can_create_public_repos,omitempty"`
 	MembersCanForkPrivateRepos  *bool `json:"members_can_fork_private_repos,omitempty"`
-	SecretScanningDefault       *bool `json:"secret_scanning_default,omitempty"`   // for new repos
-	PushProtectionDefault       *bool `json:"push_protection_default,omitempty"`   // for new repos
-	DependabotAlertsDefault     *bool `json:"dependabot_alerts_default,omitempty"` // for new repos
-	WebCommitSignoffRequired    *bool `json:"web_commit_signoff_required,omitempty"`
+	// Member privileges over repositories that already exist. Distinct from the
+	// creation toggles above: these act on the repos holding the org's history.
+	MembersCanChangeRepoVisibility *bool `json:"members_can_change_repo_visibility,omitempty"`
+	MembersCanDeleteRepos          *bool `json:"members_can_delete_repos,omitempty"`
+	MembersCanInviteOutsideCollabs *bool `json:"members_can_invite_outside_collaborators,omitempty"`
+	SecretScanningDefault          *bool `json:"secret_scanning_default,omitempty"`   // for new repos
+	PushProtectionDefault          *bool `json:"push_protection_default,omitempty"`   // for new repos
+	DependabotAlertsDefault        *bool `json:"dependabot_alerts_default,omitempty"` // for new repos
+	WebCommitSignoffRequired       *bool `json:"web_commit_signoff_required,omitempty"`
 }
 
 // Runner is a self-hosted Actions runner registered at the org level.
