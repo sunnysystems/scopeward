@@ -37,10 +37,17 @@ func collectOrg(ctx context.Context, client *ghclient.Client, org string, snap *
 		} `json:"plan"`
 		MembersCanCreatePublicRepos *bool `json:"members_can_create_public_repositories"`
 		MembersCanForkPrivateRepos  *bool `json:"members_can_fork_private_repositories"`
-		SecretScanningDefault       *bool `json:"secret_scanning_enabled_for_new_repositories"`
-		PushProtectionDefault       *bool `json:"secret_scanning_push_protection_enabled_for_new_repositories"`
-		DependabotAlertsDefault     *bool `json:"dependabot_alerts_enabled_for_new_repositories"`
-		WebCommitSignoffRequired    *bool `json:"web_commit_signoff_required"`
+		// Undocumented in the REST reference for GET /orgs/{org}, but present on
+		// the payload and owner-visible; verified against a live org. Absent for a
+		// token that cannot see owner-only settings, which is already the condition
+		// that marks DataOrg partial below.
+		MembersCanChangeRepoVisibility *bool `json:"members_can_change_repo_visibility"`
+		MembersCanDeleteRepos          *bool `json:"members_can_delete_repositories"`
+		MembersCanInviteOutsideCollabs *bool `json:"members_can_invite_outside_collaborators"`
+		SecretScanningDefault          *bool `json:"secret_scanning_enabled_for_new_repositories"`
+		PushProtectionDefault          *bool `json:"secret_scanning_push_protection_enabled_for_new_repositories"`
+		DependabotAlertsDefault        *bool `json:"dependabot_alerts_enabled_for_new_repositories"`
+		WebCommitSignoffRequired       *bool `json:"web_commit_signoff_required"`
 	}
 	if _, err := client.Get(ctx, "/orgs/"+org, nil, &dto); err != nil {
 		return false, err
@@ -54,6 +61,9 @@ func collectOrg(ctx context.Context, client *ghclient.Client, org string, snap *
 	}
 	snap.Org.MembersCanCreatePublicRepos = dto.MembersCanCreatePublicRepos
 	snap.Org.MembersCanForkPrivateRepos = dto.MembersCanForkPrivateRepos
+	snap.Org.MembersCanChangeRepoVisibility = dto.MembersCanChangeRepoVisibility
+	snap.Org.MembersCanDeleteRepos = dto.MembersCanDeleteRepos
+	snap.Org.MembersCanInviteOutsideCollabs = dto.MembersCanInviteOutsideCollabs
 	snap.Org.SecretScanningDefault = dto.SecretScanningDefault
 	snap.Org.PushProtectionDefault = dto.PushProtectionDefault
 	snap.Org.DependabotAlertsDefault = dto.DependabotAlertsDefault
