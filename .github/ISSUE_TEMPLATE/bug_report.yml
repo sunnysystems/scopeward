@@ -1,0 +1,81 @@
+name: Bug report
+description: scopeward crashed, errored, or behaved differently than documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you paste anything:** scopeward's output names your
+        organization, its repositories, its teams and its weakest points.
+        Redact it, or describe the shape instead. Never paste a token — if one
+        has appeared anywhere, revoke it first.
+
+        Reporting a check that flagged the wrong thing? Use the
+        **Check accuracy** template instead. Found a security flaw in scopeward
+        itself? Do not open an issue — see SECURITY.md.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The flags you ran, with org and repo names redacted.
+      render: shell
+      placeholder: scopeward --org REDACTED --format json --fail-on high
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The error or the relevant part of the report, redacted.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `scopeward --version`.
+      placeholder: scopeward v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Linux, macOS, Windows, CI runner, Other]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        [
+          GitHub (cloud),
+          GitHub Enterprise Server,
+          GitLab (gitlab.com),
+          GitLab (self-managed),
+        ]
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Checks
+      options:
+        - label: I am on the latest release, or I checked that `main` still has this.
+          required: true
+        - label: This report contains no token and no unredacted organization data.
+          required: true

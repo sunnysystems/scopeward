@@ -3,7 +3,7 @@ PKG     := github.com/sunnysystems/scopeward
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X $(PKG)/internal/cli.version=$(VERSION)
 
-.PHONY: build test vet fmt lint clean install
+.PHONY: build test vet fmt clean install
 
 build: ## Build the binary into ./scopeward
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/scopeward
