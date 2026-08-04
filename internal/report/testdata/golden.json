@@ -7,16 +7,27 @@
   },
   "collected_at": "2025-05-30T10:13:20Z",
   "score": {
-    "value": 81,
-    "grade": "B",
-    "penalty": 24,
+    "value": 50,
+    "grade": "D",
+    "penalty": 99,
+    "penalty_absolute": 54,
+    "value_absolute": 65,
+    "per_repo": 7.5,
+    "active_repos": 4,
     "by_severity": {
+      "critical": 1,
       "high": 2,
-      "info": 1
+      "info": 1,
+      "medium": 1
     },
     "by_axis": {
       "ai_agents": 12,
+      "code_security": 75,
       "identity": 12
+    },
+    "by_kind": {
+      "coverage": 13,
+      "debt": 86
     }
   },
   "findings": [
@@ -35,7 +46,8 @@
       },
       "description": "Soft target.",
       "remediation": "Enable 2FA.",
-      "docs_url": "https://docs.github.com/x"
+      "docs_url": "https://docs.github.com/x",
+      "kind": "debt"
     },
     {
       "check_id": "ai.agent-broad-write",
@@ -46,7 +58,33 @@
         "type": "agent",
         "name": "ai-refactor[bot]"
       },
-      "description": "Big blast radius."
+      "description": "Big blast radius.",
+      "kind": "debt"
+    },
+    {
+      "check_id": "codesecurity.open-dependabot-alerts",
+      "title": "acme/api has 42 open Dependabot alert(s)",
+      "severity": "critical",
+      "axis": "code_security",
+      "resource": {
+        "type": "repo",
+        "name": "acme/api"
+      },
+      "description": "Known-vulnerable dependencies.",
+      "volume": 42,
+      "kind": "debt"
+    },
+    {
+      "check_id": "codesecurity.repo-no-push-protection",
+      "title": "Push protection is off on acme/api",
+      "severity": "medium",
+      "axis": "code_security",
+      "resource": {
+        "type": "repo",
+        "name": "acme/api"
+      },
+      "description": "Secrets are only caught after the push.",
+      "kind": "coverage"
     },
     {
       "check_id": "ai.agent-inventory",
@@ -57,7 +95,8 @@
         "type": "org",
         "name": "acme"
       },
-      "description": "Inventory."
+      "description": "Inventory.",
+      "kind": "debt"
     }
   ],
   "not_evaluated": [

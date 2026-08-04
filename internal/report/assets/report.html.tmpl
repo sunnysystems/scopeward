@@ -241,6 +241,8 @@
   <div class="scoremeta">
     <h1>Governance score</h1>
     <p>{{.FindingCount}} findings across {{.AxisCount}} axes · {{.CheckCount}} checks evaluated</p>
+    {{if .ScoreBasis}}<p class="neval">{{.ScoreBasis}}</p>{{end}}
+    {{if .ScoreTransition}}<p class="neval">{{.ScoreTransition}}</p>{{end}}
     <div class="tally">
       {{- if .Severities}}
         {{- range .Severities}}<span class="chip sev-{{.Key}}">{{.Count}} {{.Key}}</span>{{end}}

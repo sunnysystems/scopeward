@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -22,29 +23,38 @@ func (stub) Run(context.Context, *model.Snapshot) []model.Finding { return nil }
 func TestRegisterRejectsUnclassifiedCheck(t *testing.T) {
 	cases := []struct {
 		name string
-		kind Kind
+		kind model.Kind
 		want bool // want panic
 	}{
 		{"unset", "", true},
-		{"nonsense", Kind("maybe"), true},
-		{"coverage", KindCoverage, false},
-		{"debt", KindDebt, false},
+		{"nonsense", model.Kind("maybe"), true},
+		{"coverage", model.KindCoverage, false},
+		{"debt", model.KindDebt, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			id := "test.kind-" + tc.name
+			// The registry is a package-level global, so the two accepted cases
+			// would otherwise leave phantom checks in it for the rest of the test
+			// binary — invisible until some later test enumerates All() and reports
+			// an off-by-two nobody can explain.
+			t.Cleanup(func() { delete(registry, id) })
+
 			defer func() {
+				// fmt.Sprint, not r.(string): the panic value's type is not part of
+				// any contract, and asserting it would turn a changed panic into a
+				// crash inside the recover handler.
 				r := recover()
 				switch {
 				case tc.want && r == nil:
 					t.Error("an unclassified check was accepted")
-				case tc.want && !strings.Contains(r.(string), "must declare Kind"):
+				case tc.want && !strings.Contains(fmt.Sprint(r), "must declare Kind"):
 					t.Errorf("panic should say what is missing: %v", r)
 				case !tc.want && r != nil:
 					t.Errorf("a classified check was rejected: %v", r)
 				}
 			}()
-			// Distinct IDs so the duplicate guard is not what fires.
-			Register(stub{CheckMeta{ID: "test.kind-" + tc.name, Kind: tc.kind}})
+			Register(stub{CheckMeta{ID: id, Kind: tc.kind}}) // distinct IDs: the duplicate guard must not be what fires
 		})
 	}
 }

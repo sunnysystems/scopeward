@@ -136,5 +136,5 @@ func buildAudit(ctx context.Context, coll provider.Collector, subject string, us
 	checks = filterByMode(checks, userMode)
 
 	rep := check.Run(ctx, snap, checks)
-	return report.Audit{Snapshot: snap, Report: rep, Score: score.Grade(rep.Findings)}, nil
+	return report.Audit{Snapshot: snap, Report: rep, Score: score.Grade(rep.Findings, score.Scale{ActiveRepos: snap.AssessedRepoCount()})}, nil
 }

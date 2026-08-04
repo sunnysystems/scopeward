@@ -258,7 +258,7 @@ func TestBypassableBranchProtection_SmallTeamIsInventory(t *testing.T) {
 	if got[0].GHFix != "" {
 		t.Errorf("fix = %q, want none: the tool must not suggest undoing what it recommends", got[0].GHFix)
 	}
-	if score.Grade(got).Penalty != 0 {
+	if score.Grade(got, score.Scale{}).Penalty != 0 {
 		t.Error("an expected break-glass path must not cost penalty")
 	}
 

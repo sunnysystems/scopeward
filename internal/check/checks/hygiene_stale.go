@@ -26,7 +26,7 @@ func (staleRepo) Meta() check.CheckMeta {
 		Title:           "Stale repositories",
 		Axis:            model.AxisHygiene,
 		DefaultSeverity: model.SevLow,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataRepos},
 		Description:     "Active (non-archived) repositories with no commits in over a year.",
 	}

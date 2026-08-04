@@ -53,7 +53,7 @@ func (policyAdminSource) Meta() check.CheckMeta {
 		Title:           "Repository admin outside the approved team",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataTeamRepos, model.DataRepoDirectCollaborators},
 		Description:     "Repository admin conferred by anything other than the team the organization named.",
 	}
@@ -123,7 +123,7 @@ func (policyPublicRepos) Meta() check.CheckMeta {
 		Title:           "Public repository not on the allowlist",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevCritical,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataRepos},
 		Description:     "Repositories that are public without being on the organization's allowlist.",
 		// Archiving a repository does not make it private, so the exposure
@@ -177,7 +177,7 @@ func (policyDirectCollaborators) Meta() check.CheckMeta {
 		Title:           "Direct repository grant",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataRepoDirectCollaborators},
 		Description:     "Repository access granted directly to a user rather than through a team.",
 	}
@@ -219,7 +219,7 @@ func (policyOwningTeam) Meta() check.CheckMeta {
 		Title:           "Repository without an owning team",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindCoverage,
+		Kind:            model.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataRepos, model.DataTeamRepos},
 		Description:     "Repositories with no team granting access, where the organization requires one.",
 	}

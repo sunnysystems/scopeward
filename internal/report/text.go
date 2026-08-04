@@ -10,6 +10,7 @@ import (
 
 	"github.com/sunnysystems/scopeward/internal/check"
 	"github.com/sunnysystems/scopeward/internal/model"
+	"github.com/sunnysystems/scopeward/internal/score"
 	"github.com/sunnysystems/scopeward/internal/ui"
 )
 
@@ -81,7 +82,18 @@ func renderScore(out io.Writer, a Audit) {
 		}
 		fmt.Fprintln(out)
 	}
+	renderScoreBasis(out, sc)
 	fmt.Fprintln(out)
+}
+
+// renderScoreBasis prints the shared basis and transition lines beneath the
+// score, subdued so they read as explanation rather than as findings.
+func renderScoreBasis(out io.Writer, sc score.Score) {
+	for _, line := range []string{scoreBasis(sc), scoreTransition(sc)} {
+		if line != "" {
+			fmt.Fprintln(out, "  "+ui.Subtle.Render(line))
+		}
+	}
 }
 
 // axisOrder fixes the section order, matching the HTML report.

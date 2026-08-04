@@ -27,7 +27,7 @@ func (mrApprovalBypassable) Meta() check.CheckMeta {
 		Title:           "Bypassable MR approvals",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindCoverage,
+		Kind:            model.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataMRApprovalSettings},
 		Description:     "Projects where the merge-request author can approve their own MR, or approvals are not reset on a new push.",
 	}

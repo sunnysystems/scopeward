@@ -294,7 +294,7 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 		// Score the unfiltered set first: the delta between it and the final score
 		// is exactly what the ignore config bought, and hiding that would make a
 		// suppression an invisible discount on the headline number.
-		unsuppressed := score.Grade(audit.Report.Findings)
+		unsuppressed := score.Grade(audit.Report.Findings, score.Scale{ActiveRepos: audit.Snapshot.AssessedRepoCount()})
 		var suppressed []report.Suppression
 		audit.Report.Findings, suppressed = ignoreCfg.apply(audit.Report.Findings)
 		audit.Suppressed = suppressed
@@ -312,7 +312,7 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 	}
 
 	// Score reflects what remains after ignore/baseline filtering.
-	audit.Score = score.Grade(audit.Report.Findings)
+	audit.Score = score.Grade(audit.Report.Findings, score.Scale{ActiveRepos: audit.Snapshot.AssessedRepoCount()})
 
 	if err := renderAudit(out, opts.format, audit); err != nil {
 		return err

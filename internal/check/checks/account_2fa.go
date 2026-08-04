@@ -19,7 +19,7 @@ func (accountNo2FA) Meta() check.CheckMeta {
 		Title:           "Account without 2FA",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataAccount},
 		Description:     "Whether the audited account has two-factor authentication enabled.",
 	}

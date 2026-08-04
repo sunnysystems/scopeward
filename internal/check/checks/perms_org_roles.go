@@ -67,7 +67,7 @@ func (orgWideAdminRole) Meta() check.CheckMeta {
 		Title:           "Org-wide admin role assigned",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOrgRoles},
 		Description:     "Organization roles with an admin base role assigned to users or teams, granting admin across every repository at once.",
 	}
@@ -109,7 +109,7 @@ func (orgWideWriteRole) Meta() check.CheckMeta {
 		Title:           "Org-wide write role assigned",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOrgRoles},
 		Description:     "Organization roles with a write or maintain base role assigned to users or teams, granting standing write access across every repository.",
 	}
@@ -154,7 +154,7 @@ func (nonhumanOrgRole) Meta() check.CheckMeta {
 		Title:           "Non-human identity holds an org role",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOrgRoles},
 		Description:     "Bot or app identities assigned an organization role, granting a machine account org-wide standing access.",
 	}
@@ -224,7 +224,7 @@ func (elevatedOrgRole) Meta() check.CheckMeta {
 		Title:           "Elevated custom org role",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOrgRoles},
 		Description:     "Custom organization roles with no repository base role that grant org-level management permissions (write/manage/delete on org resources).",
 	}

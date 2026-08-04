@@ -66,7 +66,15 @@ func buildArchiveLever(a Audit) *archiveLever {
 		return nil
 	}
 
-	after := score.Grade(remaining)
+	// Archiving shrinks the denominator as well as the numerator, so the
+	// hypothetical has to be scored at the size the org would then be. Scoring it
+	// against today's repo count would credit archiving with a rate improvement
+	// it does not produce — the archive lever is supposed to surface real
+	// return, not manufacture it, and under a rate model the honest answer is
+	// sometimes that archiving barely moves the number (issue #30).
+	after := score.Grade(remaining, score.Scale{
+		ActiveRepos: a.Snapshot.AssessedRepoCount() - lever.Repos,
+	})
 	lever.Penalty = a.Score.Penalty - after.Penalty
 	lever.ScoreAfter, lever.GradeAfter = after.Value, after.Grade
 	if lever.ScoreAfter <= lever.ScoreNow {

@@ -14,7 +14,7 @@ func TestGrade(t *testing.T) {
 		{Severity: model.SevInfo, Axis: model.AxisIdentity},   // -0
 	}
 
-	s := Grade(findings)
+	s := Grade(findings, Scale{})
 
 	if s.Penalty != 29 {
 		t.Errorf("penalty = %d, want 29", s.Penalty)
@@ -39,7 +39,7 @@ func TestGrade_HeavyPenaltyStaysPositive(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		findings = append(findings, model.Finding{Severity: model.SevCritical})
 	}
-	s := Grade(findings) // 10 * 25 = 250 penalty → 100/(1+2.5) ≈ 29
+	s := Grade(findings, Scale{}) // 10 * 25 = 250 penalty → 100/(1+2.5) ≈ 29
 	if s.Value != 29 {
 		t.Errorf("value = %d, want 29", s.Value)
 	}
@@ -53,11 +53,11 @@ func TestGrade_HeavyPenaltyStaysPositive(t *testing.T) {
 
 // TestGrade_Monotonic confirms more/worse findings never raise the score.
 func TestGrade_Monotonic(t *testing.T) {
-	prev := Grade(nil).Value
+	prev := Grade(nil, Scale{}).Value
 	var findings []model.Finding
 	for i := 0; i < 30; i++ {
 		findings = append(findings, model.Finding{Severity: model.SevHigh})
-		v := Grade(findings).Value
+		v := Grade(findings, Scale{}).Value
 		if v > prev {
 			t.Fatalf("score rose from %d to %d after adding a finding", prev, v)
 		}
@@ -69,7 +69,7 @@ func TestGrade_Monotonic(t *testing.T) {
 }
 
 func TestGrade_Clean(t *testing.T) {
-	s := Grade(nil)
+	s := Grade(nil, Scale{})
 	if s.Value != 100 || s.Grade != "A" {
 		t.Errorf("clean audit = %d/%s, want 100/A", s.Value, s.Grade)
 	}

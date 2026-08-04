@@ -49,6 +49,13 @@ func Run(ctx context.Context, snap *model.Snapshot, checks []Check) Report {
 			}
 		}
 
+		// Stamp the axis from the check's metadata rather than asking each check
+		// to set it on every finding it builds. One place, so it cannot be
+		// forgotten on one finding out of eighty, and it cannot disagree with the
+		// check that produced it.
+		for i := range found {
+			found[i].Kind = meta.Kind
+		}
 		rep.Findings = append(rep.Findings, found...)
 	}
 

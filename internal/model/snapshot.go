@@ -506,3 +506,36 @@ func (s *Snapshot) Owners() []Member {
 	}
 	return out
 }
+
+// ActiveRepoCount is how many non-archived repositories the snapshot carries.
+// It is the denominator the score normalizes repository-scoped penalty by, and
+// archived repos are excluded for the same reason the checks exclude them: an
+// archived repo is read-only, so it is not a place where posture can be fixed
+// or worsened.
+func (s *Snapshot) ActiveRepoCount() int {
+	n := 0
+	for _, r := range s.Repos {
+		if !r.Archived {
+			n++
+		}
+	}
+	return n
+}
+
+// AssessedRepoCount is the denominator the score normalizes repository penalty
+// by: how many active repositories the audit actually looked at.
+//
+// Zero when the per-repository pass did not fully run (--quick, or --max-repos
+// truncating it), which the score reads as "no denominator" and falls back to
+// an absolute sum. That distinction matters: with the pass skipped there are no
+// repository findings at all, and dividing zero penalty by the repositories
+// that merely *exist* would print "0.0 per repo across 23 repos" — a clean bill
+// of health for repositories nothing examined.
+func (s *Snapshot) AssessedRepoCount() int {
+	for _, k := range PerRepoKinds {
+		if c, ok := s.Coverage.Get(k); ok && c.Status == CoverageOK {
+			return s.ActiveRepoCount()
+		}
+	}
+	return 0
+}

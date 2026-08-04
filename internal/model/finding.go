@@ -39,9 +39,27 @@ type Finding struct {
 	// #31). Severity should stay driven by the worst item; weight should not
 	// ignore how many there are.
 	Volume int `json:"volume,omitempty"`
+	// Kind is the axis this finding moves: coverage (a control is off) or debt
+	// (a thing exists). Stamped by the check Runner from the check's metadata
+	// rather than set by each check, so it cannot be forgotten on one finding
+	// out of eighty and cannot disagree with the check that produced it.
+	Kind Kind `json:"kind,omitempty"`
 	// Policy marks a finding produced by an invariant the organization declared,
 	// rather than by a product default. The two make different claims — "this
 	// violates what you decided" versus "this is unusual" — and only the first
 	// settles a review, so a reader has to be able to tell them apart.
 	Policy bool `json:"policy,omitempty"`
+}
+
+// Count is how many underlying items this finding stands for, never below one.
+//
+// It exists so the weight function cannot be written against the raw field: the
+// seventy-odd checks that report a single thing leave Volume at zero, and
+// log2(0) is -Inf. Reading the count through here makes that mistake
+// unavailable rather than merely documented.
+func (f Finding) Count() int {
+	if f.Volume < 1 {
+		return 1
+	}
+	return f.Volume
 }

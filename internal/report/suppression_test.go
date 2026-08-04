@@ -35,7 +35,10 @@ func suppressedAudit() Audit {
 	}
 	all := append(append([]model.Finding{}, a.Report.Findings...),
 		a.Suppressed[0].Finding, a.Suppressed[1].Finding)
-	a.UnsuppressedScore = score.Grade(all)
+	// Same scale as a.Score, necessarily: the delta between the two is what the
+	// report prints, and scoring them against different denominators would make
+	// that number meaningless.
+	a.UnsuppressedScore = score.Grade(all, score.Scale{ActiveRepos: a.Snapshot.ActiveRepoCount()})
 	return a
 }
 

@@ -21,7 +21,7 @@ func (patNoExpiry) Meta() check.CheckMeta {
 		Title:           "Non-expiring PATs",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataFineGrainedPATs},
 		Description:     "Fine-grained personal access tokens with org access that have no expiration.",
 	}

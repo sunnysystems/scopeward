@@ -44,7 +44,7 @@ func (unpinnedActions) Meta() check.CheckMeta {
 		Title:           "Unpinned third-party actions",
 		Axis:            model.AxisSupplyChain,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataWorkflows},
 		Description:     "Workflows using third-party actions pinned to a tag/branch rather than a commit SHA.",
 	}
@@ -86,7 +86,7 @@ func (internalUnpinnedActions) Meta() check.CheckMeta {
 		Title:           "Internal actions tracked by a branch",
 		Axis:            model.AxisSupplyChain,
 		DefaultSeverity: model.SevInfo,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataWorkflows},
 		Description:     "Workflows calling the organization's own actions or reusable workflows by branch/tag rather than by commit SHA.",
 	}
@@ -125,7 +125,7 @@ func (pullRequestTarget) Meta() check.CheckMeta {
 		Title:           "Risky pull_request_target workflows",
 		Axis:            model.AxisSupplyChain,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataWorkflows},
 		Description:     "Workflows using the pull_request_target trigger, which exposes secrets to fork PRs.",
 	}

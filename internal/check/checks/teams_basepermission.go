@@ -20,7 +20,7 @@ func (basePermissionOpen) Meta() check.CheckMeta {
 		Title:           "Org base permission too permissive",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindCoverage,
+		Kind:            model.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataOrg},
 		Description:     "The organization's default repository permission grants broad access to all members.",
 	}
