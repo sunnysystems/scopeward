@@ -452,6 +452,10 @@ type Snapshot struct {
 	// AccountTwoFactor is the authenticated user's own 2FA state (user/--me mode).
 	AccountTwoFactor *bool `json:"account_two_factor,omitempty"`
 
+	// Entitlements are the paid capabilities we probed for. Read through
+	// Snapshot.Entitlement, which answers Unknown for anything unrecorded.
+	Entitlements map[Entitlement]EntitlementStatus `json:"entitlements,omitempty"`
+
 	// The fields below are provider-neutral audit configuration (not collected
 	// from any forge); they apply identically to every provider.
 	//

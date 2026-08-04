@@ -91,6 +91,15 @@ func Run(ctx context.Context, client *ghclient.Client, org string, prog Reporter
 		return nil, fmt.Errorf("no repository in %q matched --repo %s", org, strings.Join(opts.Repos, ", "))
 	}
 
+	// Entitlements are probed last: the cheap evidence path reads the repository
+	// state the pass above just collected. --quick skips the per-repo pass, so
+	// there is no evidence to read and no check that would consume the answer —
+	// probing there would spend a request to inform nobody.
+	if !opts.Quick {
+		prog.Stage("checking entitlements")
+		detectSecretProtection(ctx, client, org, snap)
+	}
+
 	snap.CollectedAt = Now()
 	return snap, nil
 }

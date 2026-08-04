@@ -33,6 +33,7 @@ type htmlView struct {
 	Axes             []axisGroup
 	TeamDesign       *teamDesignView
 	NotEvaluated     []nevalView
+	PartlyEvaluated  []limitedView
 	AcceptedRisks    []acceptedRiskView
 	SuppressionDelta string // "3 suppressed · score without them: 61 C (currently 72 C)"
 	ArchiveLever     *archiveLeverView
@@ -100,7 +101,16 @@ type problemItem struct {
 type nevalView struct {
 	Title   string
 	CheckID string
-	Missing string
+	Cause   string
+}
+
+// limitedView is a check that ran over only part of its scope.
+type limitedView struct {
+	Title    string
+	CheckID  string
+	Assessed int
+	Omitted  int
+	Reason   string
 }
 
 // archiveLeverView is the aggregate return on archiving dead repositories, shown
@@ -141,19 +151,20 @@ func buildHTMLView(a Audit) htmlView {
 	}
 
 	v := htmlView{
-		OrgLogin:     org.Login,
-		OrgDisplay:   display,
-		GeneratedAt:  a.Snapshot.CollectedAt.Format("2006-01-02 15:04 MST"),
-		Score:        a.Score,
-		GradeColor:   gradeColor(a.Score.Grade),
-		Dashboard:    buildDashboard(a),
-		FindingCount: len(a.Report.Findings),
-		CheckCount:   len(a.Report.Findings) + len(a.Report.Skipped),
-		Severities:   severityTally(a.Score),
-		Axes:         groupByAxis(a.Report.Findings),
-		TeamDesign:   teamDesignHTML(summarizeTeamDesign(a.Snapshot)),
-		NotEvaluated: nevalViews(a.Report.Skipped),
-		Coverage:     covViews(a.Snapshot.Coverage),
+		OrgLogin:        org.Login,
+		OrgDisplay:      display,
+		GeneratedAt:     a.Snapshot.CollectedAt.Format("2006-01-02 15:04 MST"),
+		Score:           a.Score,
+		GradeColor:      gradeColor(a.Score.Grade),
+		Dashboard:       buildDashboard(a),
+		FindingCount:    len(a.Report.Findings),
+		CheckCount:      len(a.Report.Findings) + len(a.Report.Skipped),
+		Severities:      severityTally(a.Score),
+		Axes:            groupByAxis(a.Report.Findings),
+		TeamDesign:      teamDesignHTML(summarizeTeamDesign(a.Snapshot)),
+		NotEvaluated:    nevalViews(a.Report.Skipped),
+		PartlyEvaluated: limitedViews(a.Report.Limited),
+		Coverage:        covViews(a.Snapshot.Coverage),
 	}
 	v.AxisCount = len(v.Axes)
 	v.CoverageSummary = coverageSummary(v.Coverage)
@@ -431,7 +442,18 @@ func evidenceJSON(ev map[string]any) string {
 func nevalViews(skipped []check.Skipped) []nevalView {
 	out := make([]nevalView, 0, len(skipped))
 	for _, s := range skipped {
-		out = append(out, nevalView{Title: s.Title, CheckID: s.CheckID, Missing: joinKinds(s.Missing)})
+		out = append(out, nevalView{Title: s.Title, CheckID: s.CheckID, Cause: skipCause(s)})
+	}
+	return out
+}
+
+func limitedViews(limited []check.Limitation) []limitedView {
+	out := make([]limitedView, 0, len(limited))
+	for _, l := range limited {
+		out = append(out, limitedView{
+			Title: l.Title, CheckID: l.CheckID,
+			Assessed: l.Assessed, Omitted: l.Omitted, Reason: l.Reason,
+		})
 	}
 	return out
 }

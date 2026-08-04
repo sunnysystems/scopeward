@@ -356,9 +356,15 @@
 </div>
 {{end}}
 
+{{if .PartlyEvaluated}}
+<h2 class="axis">Partially evaluated</h2>
+{{range .PartlyEvaluated}}<p class="neval">~ {{.Title}} <span class="cid">{{.CheckID}} · assessed {{.Assessed}}, {{.Omitted}} not assessed</span><br>
+{{.Reason}}</p>{{end}}
+{{end}}
+
 {{if .NotEvaluated}}
 <h2 class="axis">Not evaluated</h2>
-{{range .NotEvaluated}}<p class="neval">~ {{.Title}} <span class="cid">{{.CheckID}} · needs {{.Missing}}</span></p>{{end}}
+{{range .NotEvaluated}}<p class="neval">~ {{.Title}} <span class="cid">{{.CheckID}} · {{.Cause}}</span></p>{{end}}
 {{end}}
 
 {{if .AcceptedRisks}}
