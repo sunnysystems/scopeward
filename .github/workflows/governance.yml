@@ -1,0 +1,173 @@
+name: governance
+
+# Dogfooding, and the only thing in this repository that runs the binary
+# headless. CLAUDE.md lists "degrades to clean log output when running headless"
+# as non-negotiable, but until this workflow existed nothing exercised the
+# no-TTY path, the --fail-on exit-code contract, or SARIF validity outside a
+# developer's terminal.
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      fail-on:
+        description: "Fail the run at or above this severity"
+        required: false
+        default: none
+
+permissions:
+  contents: read
+  # Reading the previous run's report artifact, which is what --baseline needs.
+  actions: read
+  # Uploading SARIF to code scanning.
+  security-events: write
+
+concurrency:
+  group: governance
+  cancel-in-progress: false
+
+jobs:
+  # Builds from source rather than installing a release, so this job is a
+  # regression net from the first commit rather than from the first tag. It is
+  # the headless contract that matters here, not the packaging.
+  audit:
+    name: audit from source
+    runs-on: ubuntu-latest
+    env:
+      # The workflow's own token cannot read organization settings, so the audit
+      # needs a separate read-only PAT. Absent, the job reports why and stops
+      # rather than failing a scheduled run every week.
+      SCOPEWARD_TOKEN: ${{ secrets.SCOPEWARD_TOKEN }}
+    steps:
+      # Actions are pinned to a commit SHA rather than a tag: a floating tag is
+      # exactly what supplychain.unpinned-action reports, and this repository
+      # should pass its own audit.
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Guard on the audit token
+        id: guard
+        run: |
+          if [ -z "${SCOPEWARD_TOKEN:-}" ]; then
+            echo "::notice::SCOPEWARD_TOKEN is not set — skipping. Add a read-only PAT with read:org, repo, admin:org, read:user as a repository secret to enable the scheduled audit."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Go
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        if: steps.guard.outputs.run == 'true'
+        run: make build
+
+      # The previous successful run's report becomes this run's baseline, which
+      # is what turns a weekly audit from a wall of known findings into a report
+      # about change. Failure here is not fatal: the first run has no
+      # predecessor, and a missing baseline should degrade to a full report
+      # rather than break the control.
+      - name: Fetch the previous report as a baseline
+        if: steps.guard.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          prev=$(gh run list --workflow governance.yml --status success \
+                   --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+          if [ -n "${prev:-}" ] && gh run download "$prev" --name scopeward-report --dir baseline 2>/dev/null; then
+            echo "baseline from run $prev"
+          else
+            echo "::notice::no previous report found; this run establishes the baseline"
+          fi
+
+      - name: Audit
+        if: steps.guard.outputs.run == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.SCOPEWARD_TOKEN }}
+          FAIL_ON: ${{ inputs.fail-on || 'none' }}
+        run: |
+          set -uo pipefail
+          args=(--org "${GITHUB_REPOSITORY%%/*}" --quiet --fail-on "$FAIL_ON")
+          [ -f baseline/scopeward-report.json ] && args+=(--baseline baseline/scopeward-report.json)
+
+          # Two runs, not three: each format is a full audit of the org, so the
+          # job summary is derived from the JSON rather than paid for with a
+          # third pass. (A single run emitting several formats would remove even
+          # this one — worth having, and not something the CLI offers today.)
+          #
+          # stderr is kept out of the report files: --quiet leaves it empty on a
+          # good run, but an operational error would otherwise land inside the
+          # JSON and produce an artifact that parses as neither.
+          #
+          # </dev/null asserts the headless contract — with no TTY scopeward must
+          # render clean output and must never block prompting for a token.
+          ./scopeward "${args[@]}" --format json  > scopeward-report.json 2> audit.err </dev/null
+          code=$?
+          ./scopeward "${args[@]}" --format sarif > scopeward.sarif       2>>audit.err </dev/null
+
+          [ -s audit.err ] && cat audit.err >&2
+
+          # A report that leaked ANSI into a redirected stream would make every
+          # artifact unreadable and every downstream parse fail, so assert the
+          # no-TTY degradation rather than trust it.
+          if grep -qP '\x1b\[' scopeward-report.json scopeward.sarif; then
+            echo "::error::the headless report contains ANSI escapes"
+            exit 1
+          fi
+          if ! jq -e . scopeward-report.json >/dev/null; then
+            echo "::error::the JSON report is not parseable"
+            exit 1
+          fi
+
+          jq -r '"### scopeward · governance score \(.score.value)/100 (\(.score.grade))\n\n" +
+                 "\(.findings | length) findings" +
+                 (if .baseline then " · \(.baseline.new) new, \(.baseline.resolved) resolved since the last run" else "" end)' \
+            scopeward-report.json >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$code"
+
+      - name: Upload report
+        if: always() && steps.guard.outputs.run == 'true' && hashFiles('scopeward-report.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scopeward-report
+          path: |
+            scopeward-report.json
+            scopeward.sarif
+          retention-days: 90
+
+      - name: Upload SARIF to code scanning
+        if: always() && steps.guard.outputs.run == 'true' && hashFiles('scopeward.sarif') != ''
+        uses: github/codeql-action/upload-sarif@d1ba80a13dd99fba24a470575428917156a28b43 # v4.37.5
+        with:
+          sarif_file: scopeward.sarif
+          category: scopeward
+
+  # Exercises the packaged path — install, checksum verification, exit-code
+  # handling — which only becomes meaningful once a release publishes assets.
+  # Kept separate from the job above so a packaging break is legible as such.
+  packaged:
+    name: audit via the action
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Audit
+        uses: ./
+        env:
+          GITHUB_TOKEN: ${{ secrets.SCOPEWARD_TOKEN }}
+        with:
+          org: ${{ github.repository_owner }}
+          version: ${{ github.event.release.tag_name }}
+          format: json
+          output: scopeward-report.json
+          artifact-name: scopeward-report-packaged

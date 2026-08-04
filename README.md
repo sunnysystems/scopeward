@@ -126,6 +126,95 @@ scopeward tui --org my-org             # browse findings in an interactive TUI
 | `1`  | Operational error (bad token, org not accessible, bad flag) |
 | `2`  | `--fail-on` threshold met by at least one finding |
 
+### Run it continuously
+
+Governance is not a thing you check once. The action below installs a pinned
+release (checksum-verified, no Go toolchain needed), runs the audit headless,
+and uploads the report:
+
+> The action installs a published release, so it works from the first tagged
+> release onward. Until then, build from source in the job — this repository's
+> own [`governance.yml`](.github/workflows/governance.yml) shows that shape.
+
+```yaml
+- uses: sunnysystems/scopeward@v1
+  env:
+    GITHUB_TOKEN: ${{ secrets.SCOPEWARD_TOKEN }}   # env only — never an input
+  with:
+    org: my-org
+    fail-on: high
+```
+
+The token is deliberately **not** an input. Inputs are echoed in the run's own
+parameter display and leak under a debug `set -x`; the environment is the only
+place it belongs. Note the workflow's built-in `GITHUB_TOKEN` cannot read
+organization settings — you need a read-only PAT with `read:org`, `repo`,
+`admin:org` and `read:user`, stored as a secret.
+
+A weekly audit that reports every known finding every week is one people stop
+reading. Feed the previous run's report back in as a baseline and the job goes
+quiet until posture actually regresses:
+
+```yaml
+name: governance
+on:
+  schedule: [{ cron: "0 6 * * 1" }]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read           # to read the previous run's report
+  security-events: write  # to upload SARIF to code scanning
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch the previous report as a baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh run list --workflow governance.yml --status success \
+                   --limit 1 --json databaseId --jq '.[0].databaseId' \
+                   --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+          [ -n "$prev" ] && gh run download "$prev" --name scopeward-report --dir baseline || \
+            echo "no previous report; this run establishes the baseline"
+
+      - uses: sunnysystems/scopeward@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.SCOPEWARD_TOKEN }}
+        with:
+          org: my-org
+          baseline: baseline/scopeward-report.json
+          new-only: "true"      # speak only about what changed
+          fail-on: high         # exit 2 → the job fails → someone looks
+```
+
+The first run has no predecessor and simply establishes the baseline. After
+that the job passes silently and only speaks up when something new appears at
+or above `high`.
+
+| Action input | Default | Notes |
+|---|---|---|
+| `org` | *(none)* | omit to audit the token's own account |
+| `version` | `latest` | pin to a tag for a reproducible job |
+| `format` | `json` | `json` \| `sarif` \| `markdown` \| `text` |
+| `output` | `scopeward-report.json` | where the report is written |
+| `fail-on` | `none` | `low` \| `medium` \| `high` \| `critical` |
+| `baseline` / `new-only` | *(none)* / `false` | report only what changed |
+| `config` / `repo` / `args` | *(none)* | policy file, repo filter, extra flags |
+| `upload-artifact` / `artifact-name` | `true` / `scopeward-report` | artifact upload |
+
+Outputs: `report`, `exit-code`, `score`, `grade`. Both failure modes fail the
+job, and the job summary tells them apart — exit `2` is a posture regression to
+triage, exit `1` is a broken job to fix. Linux and macOS runners; on Windows,
+install the binary from the releases page.
+
+For SARIF in code scanning, set `format: sarif` and pass the report to
+`github/codeql-action/upload-sarif`. This repository's own
+[`governance.yml`](.github/workflows/governance.yml) does exactly that on a
+schedule, which is also what keeps the headless path honest.
+
 ## What it audits
 
 | Axis | Examples |
