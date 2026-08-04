@@ -81,8 +81,11 @@ type problemGroup struct {
 	Remediation   string // shared across the group
 	DocsURL       string // shared across the group
 	CheckID       string
-	Search        string // lowercased label/check/axis/category, for client-side filtering
-	Items         []problemItem
+	// Policy marks a group produced by an invariant the org declared rather than
+	// by a product default. Grouping is per check, so the whole group shares it.
+	Policy bool
+	Search string // lowercased label/check/axis/category, for client-side filtering
+	Items  []problemItem
 }
 
 type problemItem struct {
@@ -404,6 +407,7 @@ func toProblemGroup(fs []model.Finding) problemGroup {
 		Remediation:   first.Remediation,
 		DocsURL:       first.DocsURL,
 		CheckID:       first.CheckID,
+		Policy:        first.Policy,
 		Search:        strings.ToLower(label + " " + first.CheckID + " " + first.Axis.Title() + " " + categoryOf(first.CheckID)),
 		Items:         items,
 	}

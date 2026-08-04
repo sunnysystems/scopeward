@@ -47,6 +47,9 @@ func configureAudit(snap *model.Snapshot, opts *options) {
 	}
 
 	snap.Solo = opts.solo
+	// The org's declared policy. Checks read it for threshold overrides and
+	// invariants; nil simply means every check keeps its product default.
+	snap.Policy = opts.policy
 }
 
 // normalizeDomains lowercases each domain and strips a leading "@", dropping

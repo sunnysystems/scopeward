@@ -29,4 +29,9 @@ type Finding struct {
 	// operator discover it one failed command at a time.
 	GHScopes []string `json:"gh_scopes,omitempty"`
 	DocsURL  string   `json:"docs_url,omitempty"`
+	// Policy marks a finding produced by an invariant the organization declared,
+	// rather than by a product default. The two make different claims — "this
+	// violates what you decided" versus "this is unusual" — and only the first
+	// settles a review, so a reader has to be able to tell them apart.
+	Policy bool `json:"policy,omitempty"`
 }

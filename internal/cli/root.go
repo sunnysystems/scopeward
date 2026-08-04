@@ -57,17 +57,21 @@ type options struct {
 	owningTeamProperty  string  // custom-property name expected to name a repo's owning team
 	duplicateSimilarity float64 // roster overlap at which two teams count as duplicates
 
-	solo       bool     // single-developer mode: suggested branch fixes never require a reviewer
-	configPath string   // path to the ignore config; auto-detected if empty
-	quick      bool     // org-level only; skip the per-repo pass
-	maxRepos   int      // cap repos scanned in the per-repo pass (0 = no cap)
-	only       []string // run only these axes/check-IDs
-	skip       []string // exclude these axes/check-IDs
-	baseline   string   // prior JSON report to diff against
-	newOnly    bool     // with --baseline: keep only findings new since baseline
-	cache      bool     // use a disk ETag cache for conditional requests
-	refresh    bool     // with --cache: ignore and rewrite cached entries this run
-	fixScript  string   // write suggested gh fix commands (commented) to this path
+	solo       bool   // single-developer mode: suggested branch fixes never require a reviewer
+	configPath string // path to the ignore/policy config; auto-detected if empty
+	// policy is what the config file declared, threaded onto the snapshot so
+	// checks can measure the org against its own decisions rather than only
+	// against the product's defaults. nil when no policy block is present.
+	policy    *model.Policy
+	quick     bool     // org-level only; skip the per-repo pass
+	maxRepos  int      // cap repos scanned in the per-repo pass (0 = no cap)
+	only      []string // run only these axes/check-IDs
+	skip      []string // exclude these axes/check-IDs
+	baseline  string   // prior JSON report to diff against
+	newOnly   bool     // with --baseline: keep only findings new since baseline
+	cache     bool     // use a disk ETag cache for conditional requests
+	refresh   bool     // with --cache: ignore and rewrite cached entries this run
+	fixScript string   // write suggested gh fix commands (commented) to this path
 
 	exitCode int // set during the run; returned by Execute
 }
@@ -104,7 +108,7 @@ func Execute() int {
 	root.PersistentFlags().BoolVar(&opts.noColor, "no-color", false, "disable colored output")
 	root.PersistentFlags().BoolVar(&opts.quiet, "quiet", false, "suppress progress and informational messages on stderr (the report and errors are unaffected)")
 	root.PersistentFlags().StringVar(&opts.failOn, "fail-on", "none", "exit non-zero if a finding at or above this severity exists: none|low|medium|high|critical")
-	root.PersistentFlags().StringVar(&opts.configPath, "config", "", "ignore-rules file (default: auto-detect .scopeward.yml)")
+	root.PersistentFlags().StringVar(&opts.configPath, "config", "", "ignore rules and policy file (default: auto-detect .scopeward.yml)")
 	root.PersistentFlags().StringVar(&opts.htmlPath, "html", "", "also write a self-contained HTML report to this path")
 	root.PersistentFlags().BoolVar(&opts.open, "open", false, "open the HTML report in the default browser (requires --html)")
 	root.PersistentFlags().StringSliceVar(&opts.companyDomains, "company-domain", nil, "company email domain(s) for the SSO email check, e.g. mycompany.com (repeatable)")
@@ -232,6 +236,7 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 		return err
 	}
 	if ignoreCfg != nil {
+		opts.policy = ignoreCfg.Policy
 		// Warn, never fail: a rule naming a check that no longer exists suppresses
 		// nothing while looking like it does, so the operator should hear about it
 		// before reading a report that silently stopped honouring their acceptance.

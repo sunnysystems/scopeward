@@ -109,6 +109,12 @@ func renderFindings(out io.Writer, a Audit) {
 			if a.IsNew(f) {
 				title = ui.WarnTag.Render("NEW ") + title
 			}
+			// A policy finding says "this violates what you decided"; a product
+			// finding says "this is unusual". Only the first settles a review, so
+			// the reader is told which one they are looking at.
+			if f.Policy {
+				title = ui.Accent.Render("POLICY ") + title
+			}
 			fmt.Fprintf(out, "  %s %s\n", chip, title)
 			meta := f.Resource.Name
 			if meta != "" {

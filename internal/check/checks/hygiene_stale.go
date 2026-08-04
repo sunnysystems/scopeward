@@ -36,9 +36,15 @@ func (c staleRepo) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	if now.IsZero() {
 		now = time.Now()
 	}
+	// Precedence: the org's declared horizon, then --stale-after-days, then the
+	// product default. A written-down decision outranks a flag someone typed,
+	// because the flag is per-run and the policy file is the org's position.
 	threshold := s.StaleAfter
 	if threshold <= 0 {
 		threshold = defaultStaleThreshold
+	}
+	if s.Policy != nil && s.Policy.Thresholds.StaleRepoAfterDays != nil {
+		threshold = time.Duration(*s.Policy.Thresholds.StaleRepoAfterDays) * 24 * time.Hour
 	}
 
 	var out []model.Finding
