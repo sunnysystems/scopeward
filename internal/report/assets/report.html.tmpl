@@ -331,7 +331,7 @@
         </details>{{end}}
       </li>{{end}}
     </ul>
-    <div class="gfoot rem"><span class="cid">{{.CheckID}}</span>{{if .DocsURL}} · <a href="{{.DocsURL}}">docs</a>{{end}}</div>
+    <div class="gfoot rem"><span class="cid">{{.CheckID}}</span>{{if .Policy}} · <b>POLICY</b> — your organization declared this rule{{end}}{{if .DocsURL}} · <a href="{{.DocsURL}}">docs</a>{{end}}</div>
   </div>
 </details>
 {{end}}

@@ -50,7 +50,14 @@ func Markdown(w io.Writer, a Audit) {
 		}
 		fmt.Fprintf(w, "## %s\n\n", axis.Title())
 		for _, f := range fs {
-			fmt.Fprintf(w, "- **[%s]** %s  \n", upper(f.Severity.String()), f.Title)
+			// POLICY marks a finding produced by a rule the org declared, as
+			// opposed to a product default — the two carry different weight in a
+			// review and the reader has to be able to tell them apart.
+			mark := ""
+			if f.Policy {
+				mark = "`POLICY` "
+			}
+			fmt.Fprintf(w, "- **[%s]** %s%s  \n", upper(f.Severity.String()), mark, f.Title)
 			meta := "`" + f.CheckID + "`"
 			if f.Resource.Name != "" {
 				meta = f.Resource.Name + " · " + meta

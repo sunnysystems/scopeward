@@ -476,6 +476,10 @@ type Snapshot struct {
 	// Solo forces single-developer mode: suggested branch-protection fixes never
 	// require an approving review (you cannot approve your own PR). Audit config.
 	Solo bool `json:"-"`
+	// Policy is what the organization declared in .scopeward.yml, as distinct
+	// from what the product thinks. nil when no policy block is present, which
+	// checks must read as "use the product default" — see policy.go.
+	Policy *Policy `json:"-"`
 
 	Coverage    *CoverageReport `json:"-"`
 	CollectedAt time.Time       `json:"collected_at"`

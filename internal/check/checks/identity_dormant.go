@@ -40,9 +40,14 @@ func (c dormantMember) Run(_ context.Context, s *model.Snapshot) []model.Finding
 	if now.IsZero() {
 		now = time.Now()
 	}
+	// The org's declared window when it set one: 90 days is a product opinion,
+	// and the right default, but an org that decided otherwise should be
+	// measured against its own decision.
+	window := s.DormantAfter(dormantAfter)
+
 	var out []model.Finding
 	for _, m := range s.Members {
-		if m.LastActiveAt == nil || now.Sub(*m.LastActiveAt) <= dormantAfter {
+		if m.LastActiveAt == nil || now.Sub(*m.LastActiveAt) <= window {
 			continue // unknown activity, or active recently enough
 		}
 		days := int(now.Sub(*m.LastActiveAt).Hours() / 24)

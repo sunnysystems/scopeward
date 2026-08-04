@@ -92,6 +92,30 @@ func (teamSprawl) Meta() check.CheckMeta {
 
 func (c teamSprawl) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	teams, members := len(s.Teams), len(s.Members)
+
+	// An org that declared a team ceiling is measured against that number
+	// instead. The default — more teams than members — is a heuristic for
+	// "structure has outlived its purpose", and a heuristic is what you use
+	// until someone has actually decided.
+	if s.Policy != nil && s.Policy.Thresholds.MaxTeams != nil {
+		limit := *s.Policy.Thresholds.MaxTeams
+		if teams <= limit {
+			return nil
+		}
+		return []model.Finding{{
+			CheckID:     c.Meta().ID,
+			Title:       fmt.Sprintf("Organization has %d teams, over its declared limit of %d", teams, limit),
+			Severity:    model.SevLow,
+			Axis:        model.AxisTeams,
+			Resource:    orgRef(s.Org),
+			Policy:      true,
+			Evidence:    map[string]any{"team_count": teams, "declared_limit": limit},
+			Description: "The organization declared a maximum team count and is over it. Teams accumulate faster than anyone removes them, and each one is another grant path an access review has to walk.",
+			Remediation: "Review teams for ones that are empty, redundant, or no longer mapped to a real function, and remove them — or raise the declared limit if the structure genuinely grew.",
+			DocsURL:     "https://docs.github.com/organizations/organizing-members-into-teams/about-teams",
+		}}
+	}
+
 	if members == 0 || teams <= members {
 		return nil
 	}

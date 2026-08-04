@@ -29,6 +29,11 @@ func (directAdminGrant) Meta() check.CheckMeta {
 }
 
 func (c directAdminGrant) Run(_ context.Context, s *model.Snapshot) []model.Finding {
+	// A declared invariant on direct grants replaces this product opinion, so
+	// one problem is reported once and at the severity the org chose.
+	if s.PolicySuperseded(c.Meta().ID) {
+		return nil
+	}
 	var out []model.Finding
 	for _, r := range activeRepos(s) {
 		for _, g := range r.DirectCollaborators {
@@ -68,6 +73,11 @@ func (directRepoGrant) Meta() check.CheckMeta {
 }
 
 func (c directRepoGrant) Run(_ context.Context, s *model.Snapshot) []model.Finding {
+	// A declared invariant on this concern replaces the product opinion, so one
+	// problem is reported once and at the severity the org chose.
+	if s.PolicySuperseded(c.Meta().ID) {
+		return nil
+	}
 	var out []model.Finding
 	for _, r := range activeRepos(s) {
 		for _, g := range r.DirectCollaborators {

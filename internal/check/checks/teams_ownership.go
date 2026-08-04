@@ -43,6 +43,11 @@ func (repoNoOwningTeam) Meta() check.CheckMeta {
 }
 
 func (c repoNoOwningTeam) Run(_ context.Context, s *model.Snapshot) []model.Finding {
+	// A declared invariant on this concern replaces the product opinion, so one
+	// problem is reported once and at the severity the org chose.
+	if s.PolicySuperseded(c.Meta().ID) {
+		return nil
+	}
 	owned := make(map[string]bool)
 	for _, t := range s.Teams {
 		for _, g := range t.RepoGrants {
