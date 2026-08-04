@@ -1,0 +1,237 @@
+name: scopeward
+description: >-
+  Audit GitHub organization governance — human identities, teams and
+  permissions, non-human identities, and the AI agents committing your code.
+  Read-only; never writes to GitHub and never persists your token.
+author: Sunny Systems
+
+branding:
+  icon: shield
+  color: orange
+
+inputs:
+  org:
+    description: Organization to audit. Omit to audit the token's own account (--me).
+    required: false
+  version:
+    description: >-
+      Release to install, e.g. v0.2.0. "latest" resolves the newest release.
+      Pin this for a reproducible job.
+    required: false
+    default: latest
+  format:
+    description: "Report format: json | sarif | markdown | text."
+    required: false
+    default: json
+  output:
+    description: Path to write the report to.
+    required: false
+    default: scopeward-report.json
+  fail-on:
+    description: >-
+      Fail the job when a finding at or above this severity exists:
+      none | low | medium | high | critical.
+    required: false
+    default: none
+  baseline:
+    description: Prior JSON report to diff against, so the job speaks only about change.
+    required: false
+  new-only:
+    description: With baseline, report and fail only on findings new since it.
+    required: false
+    default: "false"
+  config:
+    description: "Path to the ignore/policy file. Default: auto-detect .scopeward.yml."
+    required: false
+  repo:
+    description: Audit only matching repositories (comma-separated; globs allowed).
+    required: false
+  args:
+    description: Extra flags appended verbatim, for options this action does not name.
+    required: false
+  upload-artifact:
+    description: Upload the report as a workflow artifact.
+    required: false
+    default: "true"
+  artifact-name:
+    description: Name of the uploaded artifact.
+    required: false
+    default: scopeward-report
+
+outputs:
+  report:
+    description: Path to the written report.
+    value: ${{ inputs.output }}
+  exit-code:
+    description: "scopeward's exit code: 0 clean, 1 operational error, 2 fail-on threshold met."
+    value: ${{ steps.audit.outputs.exit-code }}
+  score:
+    description: Governance score out of 100 (json format only; empty otherwise).
+    value: ${{ steps.audit.outputs.score }}
+  grade:
+    description: Governance grade A-F (json format only; empty otherwise).
+    value: ${{ steps.audit.outputs.grade }}
+
+runs:
+  using: composite
+  steps:
+    # A pinned release binary rather than `go install`: it is fast, and it does
+    # not put a Go toolchain in the critical path of a governance control.
+    - name: Install scopeward
+      shell: bash
+      env:
+        SCOPEWARD_VERSION: ${{ inputs.version }}
+        # Only used to resolve "latest" and download assets, which is why the
+        # workflow's own token is enough here even though the audit itself needs
+        # an org-scoped one.
+        GH_API_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+
+        case "$RUNNER_OS" in
+          Linux)  os=linux  ;;
+          macOS)  os=darwin ;;
+          *)
+            echo "::error::scopeward's action supports Linux and macOS runners." \
+                 "On $RUNNER_OS, install the binary from the releases page instead."
+            exit 1
+            ;;
+        esac
+        case "$RUNNER_ARCH" in
+          X64)   arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *)
+            echo "::error::unsupported runner architecture: $RUNNER_ARCH"
+            exit 1
+            ;;
+        esac
+
+        tag="$SCOPEWARD_VERSION"
+        if [ "$tag" = "latest" ]; then
+          # `|| true` so a failed lookup reaches the message below instead of
+          # ending the step on curl's exit code, which tells the reader nothing
+          # about what to do next.
+          latest=$(curl -fsSL -H "Authorization: Bearer $GH_API_TOKEN" \
+                     https://api.github.com/repos/sunnysystems/scopeward/releases/latest || true)
+          tag=$(printf '%s' "$latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+          if [ -z "$tag" ]; then
+            echo "::error::could not resolve the latest scopeward release." \
+                 "If none has been published yet, pin \`version\` to a tag or install from source."
+            exit 1
+          fi
+        fi
+        # goreleaser names archives without the leading v.
+        version="${tag#v}"
+        archive="scopeward_${version}_${os}_${arch}.tar.gz"
+        base="https://github.com/sunnysystems/scopeward/releases/download/${tag}"
+
+        work="$(mktemp -d)"
+        fetch() {
+          curl -fsSL -o "$work/$1" "$base/$1" && return 0
+          echo "::error::could not download $1 from release $tag." \
+               "Check that the tag exists and publishes an asset for ${os}/${arch}."
+          return 1
+        }
+        fetch "$archive"
+        fetch checksums.txt
+
+        # A governance tool that installs an unverified binary is not one. The
+        # checksum file is published alongside the archive by the same release,
+        # so this catches a corrupted or truncated download, not a compromised
+        # release — for that, pin `version` and review the tag.
+        ( cd "$work" && sha256sum --check --ignore-missing --status checksums.txt ) || {
+          echo "::error::checksum verification failed for $archive"
+          exit 1
+        }
+
+        tar -xzf "$work/$archive" -C "$work" scopeward
+        mkdir -p "$RUNNER_TEMP/scopeward-bin"
+        install -m 0755 "$work/scopeward" "$RUNNER_TEMP/scopeward-bin/scopeward"
+        rm -rf "$work"
+        # On PATH for later steps too, so a workflow can run its own scopeward
+        # invocations without reinstalling.
+        echo "$RUNNER_TEMP/scopeward-bin" >> "$GITHUB_PATH"
+        echo "scopeward $tag installed"
+
+    - name: Run audit
+      id: audit
+      shell: bash
+      env:
+        SW_ORG: ${{ inputs.org }}
+        SW_FORMAT: ${{ inputs.format }}
+        SW_OUTPUT: ${{ inputs.output }}
+        SW_FAIL_ON: ${{ inputs.fail-on }}
+        SW_BASELINE: ${{ inputs.baseline }}
+        SW_NEW_ONLY: ${{ inputs.new-only }}
+        SW_CONFIG: ${{ inputs.config }}
+        SW_REPO: ${{ inputs.repo }}
+        SW_ARGS: ${{ inputs.args }}
+      run: |
+        set -uo pipefail
+
+        # The token is never an input. An input is echoed in the run's own
+        # parameter display and is trivially leaked by a debug `set -x`; reading
+        # it from the environment keeps it out of both. scopeward itself never
+        # writes it to disk, a log, or any report format.
+        if [ -z "${GITHUB_TOKEN:-}${GH_TOKEN:-}" ]; then
+          echo "::error::no token in the environment. Set env.GITHUB_TOKEN on the step" \
+               "(the workflow's own token cannot read organization settings — use a PAT" \
+               "with read:org, repo, admin:org and read:user)."
+          exit 1
+        fi
+
+        args=(--quiet --format "$SW_FORMAT" --fail-on "$SW_FAIL_ON")
+        if [ -n "$SW_ORG" ]; then args+=(--org "$SW_ORG"); else args+=(--me); fi
+        [ -n "$SW_BASELINE" ] && [ -f "$SW_BASELINE" ] && args+=(--baseline "$SW_BASELINE")
+        [ "$SW_NEW_ONLY" = "true" ] && args+=(--new-only)
+        [ -n "$SW_CONFIG" ] && args+=(--config "$SW_CONFIG")
+        [ -n "$SW_REPO" ] && args+=(--repo "$SW_REPO")
+        # Intentionally unquoted: extra flags arrive as one string and have to
+        # word-split into arguments.
+        # shellcheck disable=SC2206
+        [ -n "$SW_ARGS" ] && args+=($SW_ARGS)
+
+        # </dev/null so the run is unambiguously headless: scopeward prompts for
+        # a token on an interactive stdin, and a job must never hang waiting.
+        "$RUNNER_TEMP/scopeward-bin/scopeward" "${args[@]}" > "$SW_OUTPUT" 2> "$RUNNER_TEMP/scopeward.err" < /dev/null
+        code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+        # stderr carries progress and warnings, never the report and never the
+        # token, so it is safe to surface and useful when something went wrong.
+        [ -s "$RUNNER_TEMP/scopeward.err" ] && cat "$RUNNER_TEMP/scopeward.err" >&2
+
+        if [ "$SW_FORMAT" = "json" ] && [ -s "$SW_OUTPUT" ]; then
+          score=$(sed -n 's/.*"value": *\([0-9]*\).*/\1/p' "$SW_OUTPUT" | head -1)
+          grade=$(sed -n 's/.*"grade": *"\([A-F]\)".*/\1/p' "$SW_OUTPUT" | head -1)
+          echo "score=$score" >> "$GITHUB_OUTPUT"
+          echo "grade=$grade" >> "$GITHUB_OUTPUT"
+          [ -n "$score" ] && echo "### scopeward · governance score $score/100 ($grade)" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        # The two failures mean different things and lead to different actions,
+        # so the summary distinguishes them even though both fail the job: exit 2
+        # is a posture regression to triage, exit 1 is a broken job to fix.
+        case "$code" in
+          0) exit 0 ;;
+          2)
+            echo "**Findings at or above \`$SW_FAIL_ON\`.** Review the report artifact." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::scopeward found findings at or above $SW_FAIL_ON (exit 2)"
+            exit 2
+            ;;
+          *)
+            echo "**scopeward failed to run** (exit $code) — this is an operational error, not a finding." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::scopeward could not complete the audit (exit $code)"
+            exit "$code"
+            ;;
+        esac
+
+    # Runs even when the audit failed the job: a report you cannot read is not
+    # much of a control, and exit 2 is exactly when you want the artifact.
+    - name: Upload report
+      if: ${{ always() && inputs.upload-artifact == 'true' && hashFiles(inputs.output) != '' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.output }}
+        if-no-files-found: warn
