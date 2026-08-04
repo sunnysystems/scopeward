@@ -44,6 +44,7 @@ type options struct {
 	user           string   // audit a user's public account/repos
 	format         string   // auto | text | json
 	noColor        bool
+	quiet          bool     // suppress progress and informational stderr output
 	failOn         string   // none | low | medium | high | critical
 	htmlPath       string   // when set, also write a self-contained HTML report here
 	open           bool     // open the HTML report in the default browser
@@ -96,6 +97,7 @@ func Execute() int {
 	root.PersistentFlags().StringVar(&opts.user, "user", "", "audit a user's public account and repositories")
 	root.PersistentFlags().StringVarP(&opts.format, "format", "f", "auto", "output format: auto|text|json|markdown|sarif")
 	root.PersistentFlags().BoolVar(&opts.noColor, "no-color", false, "disable colored output")
+	root.PersistentFlags().BoolVar(&opts.quiet, "quiet", false, "suppress progress and informational messages on stderr (the report and errors are unaffected)")
 	root.PersistentFlags().StringVar(&opts.failOn, "fail-on", "none", "exit non-zero if a finding at or above this severity exists: none|low|medium|high|critical")
 	root.PersistentFlags().StringVar(&opts.configPath, "config", "", "ignore-rules file (default: auto-detect .scopeward.yml)")
 	root.PersistentFlags().StringVar(&opts.htmlPath, "html", "", "also write a self-contained HTML report to this path")
@@ -244,7 +246,9 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 
 	if opts.cache || opts.refresh {
 		if dc, err := cache.Open(subject + "-" + tokenFingerprint(tok)); err != nil {
-			fmt.Fprintln(os.Stderr, ui.Subtle.Render("cache disabled: "+err.Error()))
+			if !opts.quiet {
+				fmt.Fprintln(os.Stderr, ui.Subtle.Render("cache disabled: "+err.Error()))
+			}
 		} else {
 			if opts.refresh {
 				dc.Clear() // fetch everything fresh this run, then rewrite the cache
@@ -254,7 +258,13 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 		}
 	}
 
-	prog := progress.New(os.Stderr, term.IsStderrTTY())
+	// --quiet routes progress to nowhere rather than special-casing every call
+	// site: the spinner is the loudest thing on stderr.
+	progOut, progTTY := io.Writer(os.Stderr), term.IsStderrTTY()
+	if opts.quiet {
+		progOut, progTTY = io.Discard, false
+	}
+	prog := progress.New(progOut, progTTY)
 	prog.SetRateFunc(coll.RateStatus)
 	coll.SetOnWait(func(d time.Duration) {
 		prog.Notice(fmt.Sprintf("%s rate limit reached; pausing %s for reset", provider.Title(kind), d.Round(time.Second)))
@@ -298,13 +308,13 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 	}
 
 	if opts.htmlPath != "" {
-		if err := writeHTMLReport(opts, audit); err != nil {
+		if err := writeHTMLReport(ctx, opts, audit); err != nil {
 			return err
 		}
 	}
 
 	if opts.fixScript != "" {
-		if err := writeFixScript(opts, audit); err != nil {
+		if err := writeFixScript(ctx, opts, audit); err != nil {
 			return err
 		}
 	}
@@ -341,7 +351,7 @@ func renderAudit(out io.Writer, format string, audit report.Audit) error {
 
 // writeHTMLReport renders the audit to a self-contained HTML file and optionally
 // opens it. Status goes to stderr so it never corrupts JSON on stdout.
-func writeHTMLReport(opts *options, audit report.Audit) error {
+func writeHTMLReport(ctx context.Context, opts *options, audit report.Audit) error {
 	f, err := os.Create(opts.htmlPath)
 	if err != nil {
 		return fmt.Errorf("creating HTML report: %w", err)
@@ -354,7 +364,10 @@ func writeHTMLReport(opts *options, audit report.Audit) error {
 		return err
 	}
 
-	fmt.Fprintln(os.Stderr, ui.Subtle.Render("HTML report written to ")+ui.Accent.Render(opts.htmlPath))
+	if !opts.quiet {
+		fmt.Fprintln(os.Stderr, ui.Subtle.Render("HTML report written to ")+ui.Accent.Render(opts.htmlPath))
+	}
+	warnIfExposed(ctx, os.Stderr, opts.htmlPath, opts.quiet)
 	if opts.open {
 		if err := openInBrowser(opts.htmlPath); err != nil {
 			fmt.Fprintln(os.Stderr, ui.Subtle.Render("could not open browser: "+err.Error()))
@@ -371,7 +384,7 @@ func tokenFingerprint(tok auth.Secret) string {
 }
 
 // writeFixScript writes the suggested gh commands (commented) to a shell file.
-func writeFixScript(opts *options, audit report.Audit) error {
+func writeFixScript(ctx context.Context, opts *options, audit report.Audit) error {
 	f, err := os.OpenFile(opts.fixScript, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 	if err != nil {
 		return fmt.Errorf("creating fix script: %w", err)
@@ -380,7 +393,10 @@ func writeFixScript(opts *options, audit report.Audit) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stderr, ui.Subtle.Render("fix script written to ")+ui.Accent.Render(opts.fixScript)+ui.Subtle.Render(" (commands are commented; review before running)"))
+	if !opts.quiet {
+		fmt.Fprintln(os.Stderr, ui.Subtle.Render("fix script written to ")+ui.Accent.Render(opts.fixScript)+ui.Subtle.Render(" (commands are commented; review before running)"))
+	}
+	warnIfExposed(ctx, os.Stderr, opts.fixScript, opts.quiet)
 	return nil
 }
 

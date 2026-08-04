@@ -100,12 +100,23 @@ scopeward tui --org my-org             # browse findings in an interactive TUI
 | `--fail-on high` | exit non-zero when a finding at/above a severity exists (CI gate) |
 | `--baseline prior.json [--new-only]` | diff against a prior run; report or fail only on *new* findings |
 | `--fix-script fixes.sh` | write suggested `gh` remediation commands, **all commented out**; nothing runs until you uncomment. The header states which token scopes the commands need and which your token is missing, and each block names its own scope |
+| `--quiet` | suppress progress and informational messages on stderr; the report and errors are unaffected |
 
 > **Keep the output out of git.** A fix script or report carries your org login,
 > repository names, team slugs and an ordered map of where you are weakest — in
-> a public repo that is a targeting document. The paths above are ignored by
-> this repository's `.gitignore`; if you write somewhere else, ignore it there
-> too.
+> a public repository that is a targeting document.
+>
+> The output path is yours to choose, so no `.gitignore` pattern can cover every
+> run. Instead, after writing a file scopeward asks git whether it is ignored,
+> and says so when it is not:
+>
+> ```text
+> ⚠ acme-fixes.sh is in a git repository and is not ignored
+>   It maps where your organization is weakest. Add to .gitignore: /acme-fixes.sh
+> ```
+>
+> The warning is silent outside a git work tree, when the file is already
+> ignored, and under `--quiet`. It is advisory: it never changes the exit code.
 
 ### Exit codes
 
