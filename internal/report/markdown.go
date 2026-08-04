@@ -18,6 +18,11 @@ func Markdown(w io.Writer, a Audit) {
 	}
 	fmt.Fprintf(w, "# scopeward: %s\n\n", org)
 	fmt.Fprintf(w, "**Governance score: %d/100 (%s)**\n\n", a.Score.Value, a.Score.Grade)
+	for _, line := range []string{scoreBasis(a.Score), scoreTransition(a.Score)} {
+		if line != "" {
+			fmt.Fprintf(w, "_%s_\n\n", line)
+		}
+	}
 
 	if tally := severityTally(a.Score); len(tally) > 0 {
 		parts := make([]string, 0, len(tally))

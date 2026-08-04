@@ -71,7 +71,7 @@ func TestAppChecksAreClearable(t *testing.T) {
 	all = append(all, appDangerousPermissions{}.Run(context.Background(), snap)...)
 	all = append(all, appInventory{}.Run(context.Background(), snap)...)
 
-	if p := score.Grade(all).Penalty; p != 0 {
+	if p := score.Grade(all, score.Scale{}).Penalty; p != 0 {
 		t.Errorf("penalty = %d, want 0: an org whose only apps are ordinary automation must be able to reach grade A", p)
 	}
 }

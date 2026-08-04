@@ -34,7 +34,7 @@ func (classicPATBroadScope) Meta() check.CheckMeta {
 		Title:           "Broadly-scoped classic PATs",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCredentialAuthorizations},
 		Description:     "SSO-authorized classic personal access tokens holding broad scopes.",
 	}

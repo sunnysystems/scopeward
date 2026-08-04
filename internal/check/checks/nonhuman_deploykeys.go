@@ -21,7 +21,7 @@ func (writableDeployKey) Meta() check.CheckMeta {
 		Title:           "Writable deploy keys",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataDeployKeys},
 		Description:     "Deploy keys that grant write (push) access to a repository.",
 	}

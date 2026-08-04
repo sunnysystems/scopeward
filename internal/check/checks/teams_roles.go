@@ -20,7 +20,7 @@ func (elevatedCustomRole) Meta() check.CheckMeta {
 		Title:           "Elevated custom roles",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCustomRoles},
 		Description:     "Custom repository roles whose base role is admin or maintain.",
 	}

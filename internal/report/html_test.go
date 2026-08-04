@@ -17,15 +17,26 @@ func sampleAudit() Audit {
 	snap.Org = model.Organization{Login: "acme", Name: "Acme Corp"}
 	snap.CollectedAt = time.Unix(1748600000, 0).UTC()
 	snap.Coverage.OK(model.DataMembers, 42)
+	// Four active repos and one archived: the score normalizes by the active
+	// count, so the fixture has to carry one for the rate to be exercised at all.
+	snap.Repos = []model.Repo{{Name: "api"}, {Name: "web"}, {Name: "docs"}, {Name: "infra"}, {Name: "retired", Archived: true}}
 	snap.Coverage.Missing(model.DataFineGrainedPATs, "org has not enabled the fine-grained PAT policy")
 
 	findings := []model.Finding{
-		{CheckID: "human.no-2fa", Title: "Member has 2FA disabled", Severity: model.SevHigh, Axis: model.AxisIdentity,
+		{CheckID: "human.no-2fa", Title: "Member has 2FA disabled", Severity: model.SevHigh, Axis: model.AxisIdentity, Kind: model.KindDebt,
 			Resource:    model.ResourceRef{Type: "member", Name: "bob", URL: "https://github.com/bob"},
 			Description: "Soft target.", Remediation: "Enable 2FA.", Evidence: map[string]any{"login": "bob"}, DocsURL: "https://docs.github.com/x"},
-		{CheckID: "ai.agent-broad-write", Title: "Agent commits with broad write", Severity: model.SevHigh, Axis: model.AxisAIAgents,
+		{CheckID: "ai.agent-broad-write", Title: "Agent commits with broad write", Severity: model.SevHigh, Axis: model.AxisAIAgents, Kind: model.KindDebt,
 			Resource: model.ResourceRef{Type: "agent", Name: "ai-refactor[bot]"}, Description: "Big blast radius."},
-		{CheckID: "ai.agent-inventory", Title: "3 machine identities committed code", Severity: model.SevInfo, Axis: model.AxisAIAgents,
+		// Repo-scoped and volume-bearing, so the golden files lock the two things
+		// the score model reads: the rate denominator and the collapsed count.
+		{CheckID: "codesecurity.open-dependabot-alerts", Title: "acme/api has 42 open Dependabot alert(s)",
+			Severity: model.SevCritical, Axis: model.AxisCodeSecurity, Kind: model.KindDebt, Volume: 42,
+			Resource: model.ResourceRef{Type: "repo", Name: "acme/api"}, Description: "Known-vulnerable dependencies."},
+		{CheckID: "codesecurity.repo-no-push-protection", Title: "Push protection is off on acme/api",
+			Severity: model.SevMedium, Axis: model.AxisCodeSecurity, Kind: model.KindCoverage,
+			Resource: model.ResourceRef{Type: "repo", Name: "acme/api"}, Description: "Secrets are only caught after the push."},
+		{CheckID: "ai.agent-inventory", Title: "3 machine identities committed code", Severity: model.SevInfo, Axis: model.AxisAIAgents, Kind: model.KindDebt,
 			Resource: model.ResourceRef{Type: "org", Name: "acme"}, Description: "Inventory."},
 	}
 	skipped := []check.Skipped{{CheckID: "nonhuman.pat-no-expiry", Title: "Non-expiring PATs", Axis: model.AxisNonHuman, Missing: []model.DataKind{model.DataFineGrainedPATs}}}
@@ -39,7 +50,7 @@ func sampleAudit() Audit {
 		Assessed: 3, Omitted: 39,
 	}}
 
-	return Audit{Snapshot: snap, Report: check.Report{Findings: findings, Skipped: skipped, Limited: limited}, Score: score.Grade(findings)}
+	return Audit{Snapshot: snap, Report: check.Report{Findings: findings, Skipped: skipped, Limited: limited}, Score: score.Grade(findings, score.Scale{ActiveRepos: snap.ActiveRepoCount()})}
 }
 
 func TestHTMLContainsKeySections(t *testing.T) {
@@ -53,8 +64,8 @@ func TestHTMLContainsKeySections(t *testing.T) {
 		"<!doctype html>",
 		"scopeward",
 		"Acme Corp (acme)",
-		"grade " + score.Grade(sampleAudit().Report.Findings).Grade,
-		"Human Identity", // axis section title
+		"grade " + sampleAudit().Score.Grade, // the rendered grade, not one recomputed at a different scale
+		"Human Identity",                     // axis section title
 		"AI Agents",
 		"Member has 2FA disabled",
 		"ai-refactor[bot]",

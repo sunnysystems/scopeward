@@ -1,15 +1,26 @@
 // Package score turns a set of findings into a transparent governance score.
 //
-// Each finding adds a fixed penalty by severity; the penalty maps to a 0..100
-// score through a smooth decay, score = 100 / (1 + penalty/halfLife), which
-// halves the score for every halfLife penalty points. This degrades gracefully
-// — a heavily-flagged org lands low but never cliffs to a flat 0, so scores stay
-// comparable instead of all saturating. The breakdown (penalty per axis, counts
-// per severity) is returned so the score is never a black box.
+// Each finding adds a penalty by severity; the penalty maps to a 0..100 score
+// through a smooth decay, score = 100 / (1 + penalty/halfLife), which halves the
+// score for every halfLife penalty points. This degrades gracefully — a
+// heavily-flagged org lands low but never cliffs to a flat 0, so scores stay
+// comparable instead of all saturating.
+//
+// Per-repository penalty is a *rate*, not a sum. Most checks run per repository,
+// so an absolute sum made the grade track repository count: the same
+// misconfiguration rate scored A at four repos and F at a hundred, and a healthy
+// org's number drifted downward as it grew, which reads as a regression when
+// nothing regressed (issue #30). Repository penalty is therefore divided by the
+// repositories audited and re-expressed at a fixed reference size, so two orgs
+// of different sizes are comparable and "we fixed half our repos" is visible.
+//
+// The breakdown — penalty per axis, per kind, counts per severity, and the
+// un-normalized figure — is returned so the score is never a black box.
 package score
 
 import (
 	"math"
+	"sort"
 
 	"github.com/sunnysystems/scopeward/internal/model"
 )
@@ -17,6 +28,13 @@ import (
 // halfLife is the penalty at which the score is halved (100 → 50). Chosen so a
 // handful of high findings dents the score meaningfully without saturating.
 const halfLife = 100.0
+
+// ReferenceRepos is the organization size a normalized score reads as: the
+// number answers "what would this org's per-repository posture cost an
+// organization of ten repositories". Raising it makes every score harsher
+// without changing what the number compares — a calibration constant, not a
+// model choice.
+const ReferenceRepos = 10
 
 // severityWeight is the score penalty per finding at each severity.
 var severityWeight = map[model.Severity]int{
@@ -27,32 +45,120 @@ var severityWeight = map[model.Severity]int{
 	model.SevInfo:     0,
 }
 
-// Score is the computed governance score with its supporting breakdown.
-type Score struct {
-	Value      int                    `json:"value"` // 0..100
-	Grade      string                 `json:"grade"` // A..F
-	Penalty    int                    `json:"penalty"`
-	BySeverity map[model.Severity]int `json:"by_severity"` // finding counts
-	ByAxis     map[model.Axis]int     `json:"by_axis"`     // penalty per axis
+// Scale is the size of what was audited, so per-repository penalty can be
+// expressed as a rate rather than a sum.
+type Scale struct {
+	// ActiveRepos is how many non-archived repositories the audit covered.
+	//
+	// Zero means the denominator is unknown, and the score falls back to the
+	// absolute sum. That is deliberate: a rate without a denominator is not a
+	// rate, and inventing one would be worse than reporting the older, coarser
+	// number. Callers that know the count must pass it.
+	ActiveRepos int
 }
 
-// Grade computes the score from findings.
-func Grade(findings []model.Finding) Score {
+// Score is the computed governance score with its supporting breakdown.
+type Score struct {
+	Value   int    `json:"value"` // 0..100
+	Grade   string `json:"grade"` // A..F
+	Penalty int    `json:"penalty"`
+
+	// PenaltyAbsolute and ValueAbsolute are the un-normalized figures: the plain
+	// sum of finding weights, and the score it would produce. Carried so a reader
+	// comparing this run against an older one can see that the number moved
+	// because the model changed, not because their organization did.
+	PenaltyAbsolute int `json:"penalty_absolute"`
+	ValueAbsolute   int `json:"value_absolute"`
+
+	// PerRepo is repository-scoped penalty divided by repositories audited — the
+	// rate the normalized score is built from, reported directly because
+	// "72 penalty across 36 repos" is the sentence that makes the number
+	// actionable.
+	PerRepo     float64 `json:"per_repo"`
+	ActiveRepos int     `json:"active_repos,omitempty"`
+
+	BySeverity map[model.Severity]int `json:"by_severity"` // finding counts
+	ByAxis     map[model.Axis]int     `json:"by_axis"`     // normalized penalty per axis
+	// ByKind splits penalty into the two questions the score answers: coverage
+	// ("are you instrumented?") and debt ("what do the instruments report?").
+	// They move in opposite directions when an operator enables a control, and a
+	// reader who cannot see the split reads a rising number as getting worse
+	// when they have only started looking (issue #27).
+	ByKind map[model.Kind]int `json:"by_kind"`
+}
+
+// Grade computes the score from findings, normalizing repository-scoped penalty
+// by the audited repository count.
+func Grade(findings []model.Finding, sc Scale) Score {
 	s := Score{
-		Value:      100,
-		BySeverity: map[model.Severity]int{},
-		ByAxis:     map[model.Axis]int{},
+		BySeverity:  map[model.Severity]int{},
+		ActiveRepos: sc.ActiveRepos,
 	}
+
+	// factor rescales a repository-scoped finding from "one of N repos" to "one
+	// of ReferenceRepos". With no denominator it stays 1 and the score is the
+	// old absolute sum.
+	factor := 1.0
+	if sc.ActiveRepos > 0 {
+		factor = float64(ReferenceRepos) / float64(sc.ActiveRepos)
+	}
+
+	var absolute, normalized, repoAbsolute float64
+	byAxis := map[model.Axis]float64{}
+	byKind := map[model.Kind]float64{}
+
 	for _, f := range findings {
-		w := severityWeight[f.Severity]
-		s.Penalty += w
+		w := float64(severityWeight[f.Severity])
 		s.BySeverity[f.Severity]++
-		s.ByAxis[f.Axis] += w
+		absolute += w
+
+		// Every slice of the breakdown is accumulated from the same scaled weight
+		// as the total, so the parts sum to the whole. A breakdown that does not
+		// add up is worse than no breakdown: it invites the reader to trust an
+		// arithmetic that is not there.
+		scaled := w
+		if isRepoScoped(f) {
+			repoAbsolute += w
+			scaled = w * factor
+		}
+		normalized += scaled
+		byAxis[f.Axis] += scaled
+		byKind[f.Kind] += scaled
 	}
-	s.Value = int(math.Round(100 / (1 + float64(s.Penalty)/halfLife)))
+
+	s.Penalty = int(math.Round(normalized))
+	s.ByAxis = roundShares(byAxis, s.Penalty)
+	s.ByKind = roundShares(byKind, s.Penalty)
+	if sc.ActiveRepos > 0 {
+		s.PerRepo = repoAbsolute / float64(sc.ActiveRepos)
+	}
+
+	s.PenaltyAbsolute = int(math.Round(absolute))
+	s.Value = decay(normalized)
+	s.ValueAbsolute = decay(absolute)
 	s.Grade = letter(s.Value)
 	return s
 }
+
+// isRepoScoped reports whether a finding is one of the many a larger
+// organization simply has more of, and so belongs in the rate rather than the
+// absolute term.
+//
+// Read from the finding's resource type rather than the check's metadata: the
+// resource is already on the finding, and one check can legitimately report
+// against different resources. Findings about members, teams, tokens, apps and
+// keys stay absolute — #30's claim is specifically about per-repository checks,
+// and an org with fifty non-expiring tokens is worse off than one with five
+// regardless of how many repositories either has.
+func isRepoScoped(f model.Finding) bool { return f.Resource.Type == "repo" }
+
+func decay(penalty float64) int {
+	return int(math.Round(100 / (1 + penalty/halfLife)))
+}
+
+// Letter is the grade band for a score value, exported so a report can label
+// the previous model's number during the transition.
+func Letter(v int) string { return letter(v) }
 
 func letter(v int) string {
 	switch {
@@ -67,4 +173,42 @@ func letter(v int) string {
 	default:
 		return "F"
 	}
+}
+
+// roundShares turns a breakdown of fractional penalties into integers that add
+// up to total exactly, by largest remainder: floor everything, then hand the
+// leftover points to the buckets that lost the most to flooring.
+//
+// Rounding each bucket on its own is the obvious implementation and it is
+// wrong. Two buckets at 12.5 and 86.5 both round up, and the reader is shown a
+// breakdown summing to 100 beside a total of 99. For a package whose whole
+// contract is that the score is never a black box, a breakdown that does not
+// reconcile is worse than none — it invites trust in an arithmetic that is not
+// there.
+//
+// Ties break on the key so the same findings always produce the same report.
+func roundShares[K ~string](in map[K]float64, total int) map[K]int {
+	out := make(map[K]int, len(in))
+	type share struct {
+		key  K
+		frac float64
+	}
+	shares := make([]share, 0, len(in))
+	assigned := 0
+	for k, v := range in {
+		floor := int(math.Floor(v))
+		out[k] = floor
+		assigned += floor
+		shares = append(shares, share{k, v - math.Floor(v)})
+	}
+	sort.Slice(shares, func(i, j int) bool {
+		if shares[i].frac != shares[j].frac {
+			return shares[i].frac > shares[j].frac
+		}
+		return shares[i].key < shares[j].key
+	})
+	for i := 0; i < total-assigned && i < len(shares); i++ {
+		out[shares[i].key]++
+	}
+	return out
 }

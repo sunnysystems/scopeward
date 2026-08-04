@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sunnysystems/scopeward/internal/check"
+	"github.com/sunnysystems/scopeward/internal/model"
 )
 
 // coverageChecks is the classification, pinned. It is written out rather than
@@ -58,9 +59,9 @@ func TestEveryCheckDeclaresItsKind(t *testing.T) {
 	var wrong []string
 	for _, c := range check.All() {
 		m := c.Meta()
-		want := check.KindDebt
+		want := model.KindDebt
 		if coverageChecks[m.ID] {
-			want = check.KindCoverage
+			want = model.KindCoverage
 		}
 		if m.Kind != want {
 			wrong = append(wrong, m.ID+": is "+string(m.Kind)+", table says "+string(want))
@@ -92,7 +93,7 @@ func TestCoverageTableHasNoStaleEntries(t *testing.T) {
 func TestBothKindsArePopulated(t *testing.T) {
 	var cov, debt int
 	for _, c := range check.All() {
-		if c.Meta().Kind == check.KindCoverage {
+		if c.Meta().Kind == model.KindCoverage {
 			cov++
 		} else {
 			debt++

@@ -109,7 +109,7 @@ func (agentInventory) Meta() check.CheckMeta {
 		Title:           "AI / machine commit identities",
 		Axis:            model.AxisAIAgents,
 		DefaultSeverity: model.SevInfo,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCommitAuthors},
 		Description:     "Inventory of bot/agent identities that have recently committed code.",
 	}
@@ -151,7 +151,7 @@ func (unidentifiedCommitter) Meta() check.CheckMeta {
 		Title:           "Unidentified bot committers",
 		Axis:            model.AxisAIAgents,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCommitAuthors, model.DataAppInstallations},
 		Description:     "Bot identities committing code that match no installed App and no known platform bot.",
 	}
@@ -189,7 +189,7 @@ func (agentBroadWrite) Meta() check.CheckMeta {
 		Title:           "Agents committing with broad write",
 		Axis:            model.AxisAIAgents,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCommitAuthors, model.DataAppInstallations, model.DataActionsTokenDefault},
 		Description:     "Machine identities that commit code while holding broad write access to the org.",
 	}

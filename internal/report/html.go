@@ -25,6 +25,8 @@ type htmlView struct {
 	GeneratedAt      string
 	Score            score.Score
 	GradeColor       string
+	ScoreBasis       string // the two axes and the per-repo rate the number is built from
+	ScoreTransition  string // what the previous scoring model would have said
 	Dashboard        dashboardView
 	FindingCount     int
 	AxisCount        int
@@ -159,6 +161,8 @@ func buildHTMLView(a Audit) htmlView {
 		GeneratedAt:     a.Snapshot.CollectedAt.Format("2006-01-02 15:04 MST"),
 		Score:           a.Score,
 		GradeColor:      gradeColor(a.Score.Grade),
+		ScoreBasis:      scoreBasis(a.Score),
+		ScoreTransition: scoreTransition(a.Score),
 		Dashboard:       buildDashboard(a),
 		FindingCount:    len(a.Report.Findings),
 		CheckCount:      len(a.Report.Findings) + len(a.Report.Skipped),

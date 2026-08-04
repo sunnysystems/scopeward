@@ -29,6 +29,26 @@
               }
             },
             {
+              "id": "codesecurity.open-dependabot-alerts",
+              "name": "codesecurity.open-dependabot-alerts",
+              "shortDescription": {
+                "text": "acme/api has 42 open Dependabot alert(s)"
+              },
+              "properties": {
+                "axis": "code_security"
+              }
+            },
+            {
+              "id": "codesecurity.repo-no-push-protection",
+              "name": "codesecurity.repo-no-push-protection",
+              "shortDescription": {
+                "text": "Push protection is off on acme/api"
+              },
+              "properties": {
+                "axis": "code_security"
+              }
+            },
+            {
               "id": "human.no-2fa",
               "name": "human.no-2fa",
               "shortDescription": {
@@ -63,6 +83,28 @@
           "properties": {
             "resource": "ai-refactor[bot]",
             "severity": "high"
+          }
+        },
+        {
+          "ruleId": "codesecurity.open-dependabot-alerts",
+          "level": "error",
+          "message": {
+            "text": "acme/api has 42 open Dependabot alert(s)"
+          },
+          "properties": {
+            "resource": "acme/api",
+            "severity": "critical"
+          }
+        },
+        {
+          "ruleId": "codesecurity.repo-no-push-protection",
+          "level": "warning",
+          "message": {
+            "text": "Push protection is off on acme/api"
+          },
+          "properties": {
+            "resource": "acme/api",
+            "severity": "medium"
           }
         },
         {

@@ -73,6 +73,16 @@ const (
 	DataCompanyDomains DataKind = "config.company_domains"
 )
 
+// PerRepoKinds are the DataKinds produced only by the per-repository pass. They
+// share a fate: --quick skips the pass entirely and --max-repos truncates it, so
+// none of them being fully collected means no repository was assessed.
+var PerRepoKinds = []DataKind{
+	DataRepoDirectCollaborators, DataDeployKeys, DataRepoWebhooks,
+	DataCommitAuthors, DataBranchProtection, DataRepoSecurity,
+	DataOpenSecretAlerts, DataDependabotEnabled, DataOpenDependabotAlerts,
+	DataWorkflows, DataCodeowners,
+}
+
 // CoverageStatus says how completely a DataKind was collected.
 type CoverageStatus string
 

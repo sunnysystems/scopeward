@@ -20,7 +20,7 @@ func (openSecretAlerts) Meta() check.CheckMeta {
 		Title:           "Open secret-scanning alerts",
 		Axis:            model.AxisCodeSecurity,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOpenSecretAlerts},
 		Description:     "Repositories with unresolved secret-scanning alerts (committed secrets).",
 		// A committed secret is exposed whether or not the repo is read-only.

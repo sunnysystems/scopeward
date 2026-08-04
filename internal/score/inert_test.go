@@ -28,7 +28,7 @@ func TestKindAndVolumeDoNotMoveTheScore(t *testing.T) {
 		withVolume[i].Volume = 99
 	}
 
-	want, got := Grade(base), Grade(withVolume)
+	want, got := Grade(base, Scale{}), Grade(withVolume, Scale{})
 	if want.Penalty != got.Penalty || want.Value != got.Value || want.Grade != got.Grade {
 		t.Errorf("volume already moves the score: %d/%s (penalty %d) vs %d/%s (penalty %d).\n"+
 			"Step 1 of #39 records the data; the weight function lands with the model that explains it.",

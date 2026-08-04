@@ -3,6 +3,8 @@ package check
 import (
 	"fmt"
 	"sort"
+
+	"github.com/sunnysystems/scopeward/internal/model"
 )
 
 // registry holds every check, keyed by ID. Checks register themselves from
@@ -22,8 +24,8 @@ func Register(c Check) {
 	// lands on, so an unclassified check would move the score quietly and in a
 	// direction nobody chose — the exact failure #39 exists to prevent. Failing
 	// at init means a new check cannot be merged without someone deciding.
-	if meta.Kind != KindCoverage && meta.Kind != KindDebt {
-		panic(fmt.Sprintf("check %q must declare Kind (KindCoverage or KindDebt); see check.Kind", id))
+	if meta.Kind != model.KindCoverage && meta.Kind != model.KindDebt {
+		panic(fmt.Sprintf("check %q must declare Kind (model.KindCoverage or model.KindDebt); see model.Kind", id))
 	}
 	if _, dup := registry[id]; dup {
 		panic(fmt.Sprintf("check: duplicate check ID %q", id))

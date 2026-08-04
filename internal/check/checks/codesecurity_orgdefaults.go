@@ -56,7 +56,7 @@ func (c orgDefault) Meta() check.CheckMeta {
 		Title:           c.title,
 		Axis:            model.AxisCodeSecurity,
 		DefaultSeverity: c.sev,
-		Kind:            check.KindCoverage,
+		Kind:            model.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataOrg},
 		Description:     c.short + ".",
 	}

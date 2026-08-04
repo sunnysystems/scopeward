@@ -33,7 +33,7 @@ func (ownerSprawl) Meta() check.CheckMeta {
 		Title:           "Too many org owners",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataMembers, model.DataMemberRoles},
 		Description:     "An unusually high number of org owners widens the most privileged blast radius.",
 	}

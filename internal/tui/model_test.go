@@ -21,7 +21,7 @@ func sampleAudit() report.Audit {
 		{CheckID: "human.no-2fa", Title: "Member has 2FA disabled", Severity: model.SevHigh, Axis: model.AxisIdentity,
 			Resource: model.ResourceRef{Type: "member", Name: "bob"}, Description: "soft target", Remediation: "enable 2FA"},
 	}
-	return report.Audit{Snapshot: snap, Report: check.Report{Findings: findings}, Score: score.Grade(findings)}
+	return report.Audit{Snapshot: snap, Report: check.Report{Findings: findings}, Score: score.Grade(findings, score.Scale{ActiveRepos: snap.ActiveRepoCount()})}
 }
 
 func newTestModel() appModel {

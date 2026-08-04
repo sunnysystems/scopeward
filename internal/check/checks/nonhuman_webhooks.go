@@ -28,7 +28,7 @@ func (c webhookHygiene) Meta() check.CheckMeta {
 			Title:           "Insecure org webhooks",
 			Axis:            model.AxisNonHuman,
 			DefaultSeverity: model.SevMedium,
-			Kind:            check.KindDebt,
+			Kind:            model.KindDebt,
 			RequiresData:    []model.DataKind{model.DataOrgWebhooks},
 			Description:     "Org-level webhooks without a secret or with SSL verification disabled.",
 		}
@@ -38,7 +38,7 @@ func (c webhookHygiene) Meta() check.CheckMeta {
 		Title:           "Insecure repo webhooks",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataRepoWebhooks},
 		Description:     "Repository webhooks without a secret or with SSL verification disabled.",
 	}

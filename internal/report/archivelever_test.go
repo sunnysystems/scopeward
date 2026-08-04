@@ -30,7 +30,7 @@ func leverAudit(findings []model.Finding) Audit {
 	return Audit{
 		Snapshot: model.NewSnapshot("acme"),
 		Report:   check.Report{Findings: findings},
-		Score:    score.Grade(findings),
+		Score:    score.Grade(findings, score.Scale{}),
 	}
 }
 

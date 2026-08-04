@@ -22,7 +22,7 @@ func (tokenCanApprovePRs) Meta() check.CheckMeta {
 		Title:           "Actions can approve pull requests",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindCoverage,
+		Kind:            model.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataActionsTokenDefault},
 		Description:     "Whether GitHub Actions workflows are allowed to approve pull requests.",
 	}
@@ -56,7 +56,7 @@ func (actionsTokenWriteDefault) Meta() check.CheckMeta {
 		Title:           "GITHUB_TOKEN defaults to write",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindCoverage,
+		Kind:            model.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataActionsTokenDefault},
 		Description:     "The default GITHUB_TOKEN permission granted to Actions workflows across the org.",
 	}

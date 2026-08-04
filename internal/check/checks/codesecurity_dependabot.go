@@ -25,7 +25,7 @@ func (repoDependabotAlertsOff) Meta() check.CheckMeta {
 		Title:           "Repos without Dependabot alerts",
 		Axis:            model.AxisCodeSecurity,
 		DefaultSeverity: model.SevMedium,
-		Kind:            check.KindCoverage,
+		Kind:            model.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataDependabotEnabled},
 		Description:     "Repositories where Dependabot vulnerability alerts are disabled.",
 	}
@@ -87,7 +87,7 @@ func (openDependabotAlerts) Meta() check.CheckMeta {
 		Title:           "Repos with open Dependabot alerts",
 		Axis:            model.AxisCodeSecurity,
 		DefaultSeverity: model.SevHigh,
-		Kind:            check.KindDebt,
+		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOpenDependabotAlerts},
 		Description:     "Repositories with open Dependabot vulnerability alerts on their dependencies.",
 	}
