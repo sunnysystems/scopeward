@@ -24,22 +24,66 @@ func (repoNoPushProtection) Meta() check.CheckMeta {
 	}
 }
 
+// paywalled reports whether this repo's push protection is behind an
+// entitlement the org does not hold. Push protection is free on public
+// repositories on every plan, so the gate is per repository: an org-level gate
+// would go silent on exactly the repos where an exposed secret is worst.
+//
+// Only a confirmed-absent entitlement suppresses. Unknown reports as before —
+// suppressing on "we could not tell" would hide fixable exposure, which is the
+// failure this gate exists to avoid, pointed the other way.
+func paywalled(s *model.Snapshot, r model.Repo) bool {
+	return r.Private && s.Entitlement(model.EntSecretProtection).State == model.EntitlementAbsent
+}
+
+// Limitation reports the private repositories left unassessed because the org
+// cannot enable push protection on them. Without this, dropping them would read
+// as a clean bill of health for repos nobody looked at.
+func (c repoNoPushProtection) Limitation(s *model.Snapshot) *check.Limitation {
+	var assessed, omitted int
+	for _, r := range activeRepos(s) {
+		if paywalled(s, r) {
+			omitted++
+			continue
+		}
+		assessed++
+	}
+	if omitted == 0 {
+		return nil
+	}
+	return &check.Limitation{
+		CheckID:  c.Meta().ID,
+		Title:    c.Meta().Title,
+		Axis:     model.AxisCodeSecurity,
+		Reason:   "private repositories require GitHub Secret Protection, which this organization does not have: " + s.Entitlement(model.EntSecretProtection).Reason,
+		Assessed: assessed,
+		Omitted:  omitted,
+	}
+}
+
 func (c repoNoPushProtection) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	var out []model.Finding
 	for _, r := range activeRepos(s) {
 		if r.PushProtection == nil || *r.PushProtection {
 			continue // unknown or enabled
 		}
+		// The only remediation is a purchase, so this is not a finding — it is an
+		// invoice. Reported via Limitation instead (issue #50).
+		if paywalled(s, r) {
+			continue
+		}
 		scanningOff := r.SecretScanning != nil && !*r.SecretScanning
 
-		// Public repos get secret scanning + push protection for free; private
-		// repos need GitHub Advanced Security, so the fix differs and the
-		// actionability (hence severity) is lower.
+		// Public repos get push protection for free on every plan. Private repos
+		// need GitHub Secret Protection: when the org holds it the fix is the same
+		// one command, and when it does not the repo never reaches this loop.
+		// Severity stays lower for private repos because the exposure of a leaked
+		// secret is bounded by who can read the repository.
 		sev := model.SevHigh
 		remediation := "Enable secret-scanning push protection on this repository (and org-wide for new repos)."
 		if r.Private {
 			sev = model.SevMedium
-			remediation = "Enable push protection on this repo. For private repositories this requires GitHub Advanced Security; enable GHAS, or move the code to a context where it is covered."
+			remediation = "Enable push protection on this repo, and org-wide for new private repos. This is covered by the organization's GitHub Secret Protection entitlement."
 		}
 
 		title := "Push protection is off on " + s.Org.Login + "/" + r.Name

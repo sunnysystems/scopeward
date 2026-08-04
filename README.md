@@ -210,6 +210,31 @@ and the gap is shown up front and in the coverage report. Some checks
 (fine-grained PAT inventory, custom roles) require GitHub Enterprise and are
 reported as not evaluated elsewhere.
 
+### Paid features you do not have
+
+A finding whose only remediation is a purchase is not a finding — it is an
+invoice, and at scale it buries the ones you can act on. So scopeward separates
+what it can *see* from what you can *fix*: where a fix needs a paid capability
+your organization does not hold, the finding is withheld and the omission is
+reported instead.
+
+Push protection is the case that matters most. It is free on public
+repositories on every plan and paid on private ones, so the test is per
+repository — an org-wide switch would go quiet on exactly the repos where a
+leaked secret is worst. When some scope is out of reach the report says so
+under **Partially evaluated**, with what was left out and why; when none of it
+is reachable the check reads as *not evaluated*. Either way the score is
+unaffected by capabilities you were never sold.
+
+The entitlement is established from evidence, never from your plan name.
+GitHub sells Secret Protection independently of the plan tier, so a Team org
+may hold it and an Enterprise org may not — a repository that already has push
+protection on proves the point at no API cost, and only when nothing proves it
+either way does scopeward ask the billing endpoint. If that cannot be answered
+(no `admin:org`, for instance), the result is *unknown*, and unknown reports
+everything: withholding on a guess would hide exposure you can in fact fix.
+Each run discloses what it concluded under `entitlements` in the JSON output.
+
 ### Branch protection is scaled to your team
 
 A remediation nobody can live with is a remediation nobody applies, so the

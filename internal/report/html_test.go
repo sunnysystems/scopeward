@@ -29,8 +29,17 @@ func sampleAudit() Audit {
 			Resource: model.ResourceRef{Type: "org", Name: "acme"}, Description: "Inventory."},
 	}
 	skipped := []check.Skipped{{CheckID: "nonhuman.pat-no-expiry", Title: "Non-expiring PATs", Axis: model.AxisNonHuman, Missing: []model.DataKind{model.DataFineGrainedPATs}}}
+	// A check that ran but not over everything it covers. Present in the fixture
+	// so the golden files lock the rendering of the partially-evaluated state in
+	// every format, not just its existence in the struct.
+	limited := []check.Limitation{{
+		CheckID: "codesecurity.repo-no-push-protection", Title: "Repos without push protection",
+		Axis:     model.AxisCodeSecurity,
+		Reason:   "private repositories require GitHub Secret Protection, which this organization does not have",
+		Assessed: 3, Omitted: 39,
+	}}
 
-	return Audit{Snapshot: snap, Report: check.Report{Findings: findings, Skipped: skipped}, Score: score.Grade(findings)}
+	return Audit{Snapshot: snap, Report: check.Report{Findings: findings, Skipped: skipped, Limited: limited}, Score: score.Grade(findings)}
 }
 
 func TestHTMLContainsKeySections(t *testing.T) {

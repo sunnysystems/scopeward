@@ -31,6 +31,7 @@ func Text(out io.Writer, a Audit) {
 	if td := summarizeTeamDesign(a.Snapshot); td != nil {
 		renderTeamDesignText(out, td)
 	}
+	renderPartiallyEvaluated(out, a.Report.Limited)
 	renderNotEvaluated(out, a.Report.Skipped)
 	renderAcceptedRisks(out, a)
 	renderCoverage(out, a.Snapshot.Coverage)
@@ -128,8 +129,40 @@ func renderNotEvaluated(out io.Writer, skipped []check.Skipped) {
 		fmt.Fprintf(out, "  %s %s %s\n",
 			ui.WarnTag.Render("~"),
 			s.Title,
-			ui.Subtle.Render(fmt.Sprintf("· %s · needs %s", s.CheckID, joinKinds(s.Missing))),
+			ui.Subtle.Render(fmt.Sprintf("· %s · %s", s.CheckID, skipCause(s))),
 		)
+	}
+	fmt.Fprintln(out)
+}
+
+// skipCause explains a skip in the terms that help the reader act. Missing data
+// is a scope or collection problem, so naming the DataKinds is the useful
+// answer; anything else carries its own reason, where the DataKinds would say
+// nothing ("needs repos.security_analysis" does not tell you that the fix is a
+// purchase).
+func skipCause(s check.Skipped) string {
+	if s.Reason != "" {
+		return s.Reason
+	}
+	return "needs " + joinKinds(s.Missing)
+}
+
+// renderPartiallyEvaluated sits between findings and not-evaluated: these checks
+// did run and did report, but not over everything they cover. Folding them into
+// either neighbour would mislead — as findings they look complete, and as
+// not-evaluated they look untried.
+func renderPartiallyEvaluated(out io.Writer, limited []check.Limitation) {
+	if len(limited) == 0 {
+		return
+	}
+	fmt.Fprintln(out, ui.Label.Render("Partially evaluated"))
+	for _, l := range limited {
+		fmt.Fprintf(out, "  %s %s %s\n",
+			ui.WarnTag.Render("~"),
+			l.Title,
+			ui.Subtle.Render(fmt.Sprintf("· %s · assessed %d, %d not assessed", l.CheckID, l.Assessed, l.Omitted)),
+		)
+		fmt.Fprintf(out, "  %s\n", ui.Subtle.Render("    "+l.Reason))
 	}
 	fmt.Fprintln(out)
 }

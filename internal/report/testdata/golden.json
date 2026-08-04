@@ -70,6 +70,16 @@
       ]
     }
   ],
+  "partially_evaluated": [
+    {
+      "check_id": "codesecurity.repo-no-push-protection",
+      "title": "Repos without push protection",
+      "axis": "code_security",
+      "reason": "private repositories require GitHub Secret Protection, which this organization does not have",
+      "assessed": 3,
+      "omitted": 39
+    }
+  ],
   "coverage": [
     {
       "kind": "fine_grained_pats",

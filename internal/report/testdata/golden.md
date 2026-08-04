@@ -20,6 +20,10 @@
   acme · `ai.agent-inventory`  
   Inventory.  
 
+## Partially evaluated
+
+- ~ Repos without push protection (`codesecurity.repo-no-push-protection`): assessed 3, 39 not assessed — private repositories require GitHub Secret Protection, which this organization does not have
+
 ## Not evaluated
 
 - ~ Non-expiring PATs (`nonhuman.pat-no-expiry`): needs fine_grained_pats

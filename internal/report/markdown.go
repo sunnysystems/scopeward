@@ -81,10 +81,19 @@ func Markdown(w io.Writer, a Audit) {
 		renderTeamDesignMarkdown(w, td)
 	}
 
+	if limited := a.Report.Limited; len(limited) > 0 {
+		fmt.Fprint(w, "## Partially evaluated\n\n")
+		for _, l := range limited {
+			fmt.Fprintf(w, "- ~ %s (`%s`): assessed %d, %d not assessed — %s\n",
+				l.Title, l.CheckID, l.Assessed, l.Omitted, l.Reason)
+		}
+		fmt.Fprintln(w)
+	}
+
 	if skipped := a.Report.Skipped; len(skipped) > 0 {
 		fmt.Fprint(w, "## Not evaluated\n\n")
 		for _, s := range skipped {
-			fmt.Fprintf(w, "- ~ %s (`%s`): needs %s\n", s.Title, s.CheckID, joinKinds(s.Missing))
+			fmt.Fprintf(w, "- ~ %s (`%s`): %s\n", s.Title, s.CheckID, skipCause(s))
 		}
 		fmt.Fprintln(w)
 	}

@@ -25,7 +25,31 @@ func Run(ctx context.Context, snap *model.Snapshot, checks []Check) Report {
 			})
 			continue
 		}
-		rep.Findings = append(rep.Findings, c.Run(ctx, snap)...)
+		found := c.Run(ctx, snap)
+
+		// A check may have run over only part of its scope. Record that next to
+		// the findings, or — when nothing at all was in reach — as not evaluated,
+		// so a fully-gated check never reads as a clean pass.
+		if l, ok := c.(Limiter); ok {
+			if lim := l.Limitation(snap); lim != nil && lim.Omitted > 0 {
+				// Nothing in reach and nothing reported: not evaluated. The
+				// len(found) guard is deliberate — a check whose Limitation and Run
+				// disagree is a bug in that check, and the safe way to fail is to
+				// keep its findings visible rather than let a bad count hide them.
+				if lim.Assessed == 0 && len(found) == 0 {
+					rep.Skipped = append(rep.Skipped, Skipped{
+						CheckID: meta.ID,
+						Title:   meta.Title,
+						Axis:    meta.Axis,
+						Reason:  lim.Reason,
+					})
+					continue
+				}
+				rep.Limited = append(rep.Limited, *lim)
+			}
+		}
+
+		rep.Findings = append(rep.Findings, found...)
 	}
 
 	sort.SliceStable(rep.Findings, func(i, j int) bool {
