@@ -21,6 +21,7 @@ func (outsideCollaborators) Meta() check.CheckMeta {
 		Title:           "Outside collaborators",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOutsideCollaborators},
 		Description:     "Accounts with repo access that are not members of the organization.",
 	}

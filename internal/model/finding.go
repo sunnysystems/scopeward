@@ -29,6 +29,16 @@ type Finding struct {
 	// operator discover it one failed command at a time.
 	GHScopes []string `json:"gh_scopes,omitempty"`
 	DocsURL  string   `json:"docs_url,omitempty"`
+	// Volume is how many underlying items this finding stands for — 99 open CVEs,
+	// 3 leaked secrets — where a check collapses many into one finding. Zero and
+	// one both mean "just this one".
+	//
+	// It exists because severity and weight are different questions, and the
+	// score currently conflates them: a repo with one critical CVE and a repo
+	// with one critical plus ninety-eight others are the same 25 points (issue
+	// #31). Severity should stay driven by the worst item; weight should not
+	// ignore how many there are.
+	Volume int `json:"volume,omitempty"`
 	// Policy marks a finding produced by an invariant the organization declared,
 	// rather than by a product default. The two make different claims — "this
 	// violates what you decided" versus "this is unusual" — and only the first

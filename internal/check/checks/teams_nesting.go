@@ -27,6 +27,7 @@ func (deepNesting) Meta() check.CheckMeta {
 		Title:           "Deeply nested teams",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataTeams},
 		Description:     "Teams nested several levels deep make inherited repository access hard to audit.",
 	}
@@ -85,6 +86,7 @@ func (teamSprawl) Meta() check.CheckMeta {
 		Title:           "Team sprawl",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataTeams, model.DataMembers},
 		Description:     "More teams than members suggests accumulated, possibly stale, team structure.",
 	}

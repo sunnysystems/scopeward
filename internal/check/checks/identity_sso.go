@@ -19,6 +19,7 @@ func (notSSOLinked) Meta() check.CheckMeta {
 		Title:           "Members outside SSO",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataMembers, model.DataSAMLIdentities},
 		Description:     "Members with no SAML identity linked to the org's identity provider.",
 	}

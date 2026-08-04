@@ -30,6 +30,7 @@ func (dormantMember) Meta() check.CheckMeta {
 		Title:           "Dormant members",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataMembers, model.DataMemberActivity},
 		Description:     "Members with no activity for an extended period (where the provider exposes last-activity data).",
 	}

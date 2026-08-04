@@ -21,6 +21,7 @@ func (agentOnUnprotectedBranch) Meta() check.CheckMeta {
 		Title:           "Agents pushing to unprotected branches",
 		Axis:            model.AxisAIAgents,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCommitAuthors, model.DataBranchProtection},
 		Description:     "Repos where bot/agent identities commit and the default branch is unprotected.",
 	}

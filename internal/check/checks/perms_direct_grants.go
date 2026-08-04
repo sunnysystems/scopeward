@@ -23,6 +23,7 @@ func (directAdminGrant) Meta() check.CheckMeta {
 		Title:           "Direct admin on repositories",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataRepoDirectCollaborators},
 		Description:     "Users with admin permission granted directly on a repo, bypassing team-based governance.",
 	}
@@ -67,6 +68,7 @@ func (directRepoGrant) Meta() check.CheckMeta {
 		Title:           "Direct repository grants",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataRepoDirectCollaborators},
 		Description:     "Users granted access directly on a repo (non-admin), bypassing team-based governance.",
 	}

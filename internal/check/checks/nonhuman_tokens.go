@@ -86,6 +86,7 @@ func (tokenNoExpiry) Meta() check.CheckMeta {
 		Title:           "Non-expiring access tokens",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataAccessTokens},
 		Description:     "Personal, project, or group access tokens that are active and have no expiration.",
 	}
@@ -122,6 +123,7 @@ func (tokenBroadScope) Meta() check.CheckMeta {
 		Title:           "Broadly-scoped access tokens",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataAccessTokens},
 		Description:     "Access tokens holding broad scopes such as api (full read-write) or sudo.",
 	}
@@ -174,6 +176,7 @@ func (tokenStale) Meta() check.CheckMeta {
 		Title:           "Stale access tokens",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataAccessTokens},
 		Description:     "Active access tokens unused for over 90 days, or created long ago and never used.",
 	}
@@ -239,6 +242,7 @@ func (deployTokenNoExpiry) Meta() check.CheckMeta {
 		Title:           "Non-expiring deploy tokens",
 		Axis:            model.AxisNonHuman,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataDeployTokens},
 		Description:     "Deploy tokens (project or group automation credentials) that have no expiration.",
 	}

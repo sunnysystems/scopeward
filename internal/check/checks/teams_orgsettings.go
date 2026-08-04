@@ -99,6 +99,7 @@ func (c memberPrivilege) Meta() check.CheckMeta {
 		Title:           c.title,
 		Axis:            model.AxisTeams,
 		DefaultSeverity: c.sev,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataOrg},
 		Description:     c.short + ".",
 	}
@@ -132,6 +133,7 @@ func (membersCanCreatePublic) Meta() check.CheckMeta {
 		Title:           "Members can create public repos",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataOrg},
 		Description:     "Whether any member can create public repositories in the org.",
 	}
@@ -169,6 +171,7 @@ func (membersCanForkPrivate) Meta() check.CheckMeta {
 		Title:           "Members can fork private repos",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataOrg},
 		Description:     "Whether members can fork private/internal repositories.",
 	}

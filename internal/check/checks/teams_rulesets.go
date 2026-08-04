@@ -20,6 +20,7 @@ func (rulesetNotEnforced) Meta() check.CheckMeta {
 		Title:           "Org rulesets not enforced",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataOrgRulesets},
 		Description:     "Organization rulesets in evaluate/disabled mode rather than actively enforcing.",
 	}

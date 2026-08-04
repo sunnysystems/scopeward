@@ -41,6 +41,7 @@ func (ghostTeam) Meta() check.CheckMeta {
 		Title:           "Teams that grant no repository access",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataTeamMembers, model.DataTeamRepos},
 		Description:     "Teams with members but no repository grants add governance overhead without conferring access.",
 	}
@@ -78,6 +79,7 @@ func (orphanTeam) Meta() check.CheckMeta {
 		Title:           "Teams without a maintainer",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataTeamMembers},
 		Description:     "Teams with members but no maintainer have no one accountable for membership changes.",
 	}
@@ -116,6 +118,7 @@ func (emptyTeam) Meta() check.CheckMeta {
 		Title:           "Empty teams",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevInfo,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataTeamMembers},
 		Description:     "Teams with no members (and no child teams) are residue that clutters the permission model.",
 	}
@@ -156,6 +159,7 @@ func (singletonTeam) Meta() check.CheckMeta {
 		Title:           "One-person teams",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataTeamMembers},
 		Description:     "A team with a single member usually models access to one person; effectively a direct grant wearing a team's clothes.",
 	}
@@ -215,6 +219,7 @@ func (teamSizeTierAdvice) Meta() check.CheckMeta {
 		Title:           "Team structure for organization size",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevInfo,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataMembers, model.DataTeams},
 		Description:     "Advises the team-structure model that fits the organization's size, and notes gaps against it.",
 	}

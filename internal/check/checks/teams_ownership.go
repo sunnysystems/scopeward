@@ -37,6 +37,7 @@ func (repoNoOwningTeam) Meta() check.CheckMeta {
 		Title:           "Repositories with no owning team",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataRepos, model.DataTeamRepos},
 		Description:     "Repositories that no team has access to are governed only by direct grants, leaving no team accountable for them.",
 	}
@@ -86,6 +87,7 @@ func (repoNoOwningProperty) Meta() check.CheckMeta {
 		Title:           "Repositories missing the owning-team property",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataRepos, model.DataCustomProperties},
 		Description:     "When the org uses a custom property to record each repo's owning team, repositories missing it have undocumented ownership.",
 	}
@@ -143,6 +145,7 @@ func (repoNoCodeowner) Meta() check.CheckMeta {
 		Title:           "Repositories without a team code owner",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataCodeowners, model.DataTeams},
 		Description:     "Repositories with no CODEOWNERS file, or one that assigns no team, lack group-based review ownership.",
 	}

@@ -26,6 +26,7 @@ func (staleInvitation) Meta() check.CheckMeta {
 		Title:           "Stale pending invitations",
 		Axis:            model.AxisIdentity,
 		DefaultSeverity: model.SevLow,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataPendingInvitations},
 		Description:     "Organization invitations left unaccepted for over a month.",
 	}

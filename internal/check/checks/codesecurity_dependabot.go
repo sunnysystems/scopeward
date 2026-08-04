@@ -25,6 +25,7 @@ func (repoDependabotAlertsOff) Meta() check.CheckMeta {
 		Title:           "Repos without Dependabot alerts",
 		Axis:            model.AxisCodeSecurity,
 		DefaultSeverity: model.SevMedium,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataDependabotEnabled},
 		Description:     "Repositories where Dependabot vulnerability alerts are disabled.",
 	}
@@ -86,6 +87,7 @@ func (openDependabotAlerts) Meta() check.CheckMeta {
 		Title:           "Repos with open Dependabot alerts",
 		Axis:            model.AxisCodeSecurity,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindDebt,
 		RequiresData:    []model.DataKind{model.DataOpenDependabotAlerts},
 		Description:     "Repositories with open Dependabot vulnerability alerts on their dependencies.",
 	}
@@ -118,6 +120,11 @@ func (c openDependabotAlerts) Run(_ context.Context, s *model.Snapshot) []model.
 			Title:    fmt.Sprintf("%s/%s has %d open Dependabot alert(s) (%s)", s.Org.Login, r.Name, a.Total(), alertBreakdown(*a)),
 			Severity: sev,
 			Axis:     model.AxisCodeSecurity,
+			// Severity stays driven by the worst alert, which is right. Volume
+			// carries how many there are, which is a different question the score
+			// currently ignores — one critical CVE and one critical plus
+			// ninety-eight others weigh the same today (#31).
+			Volume:   a.Total(),
 			Resource: repoRef(s.Org.Login, r),
 			Evidence: map[string]any{
 				"repo":     r.Name,

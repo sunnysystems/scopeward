@@ -20,6 +20,7 @@ func (unprotectedDefaultBranch) Meta() check.CheckMeta {
 		Title:           "Unprotected default branches",
 		Axis:            model.AxisTeams,
 		DefaultSeverity: model.SevHigh,
+		Kind:            check.KindCoverage,
 		RequiresData:    []model.DataKind{model.DataBranchProtection},
 		Description:     "Repositories whose default branch is not covered by branch protection or a ruleset.",
 	}
