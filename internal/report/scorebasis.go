@@ -30,6 +30,24 @@ func scoreBasis(sc score.Score) string {
 	return s
 }
 
+// scoreEstimate discloses the part of the number that was priced rather than
+// measured.
+//
+// A repository with monitoring switched off is not worth a flat five points; it
+// is worth the debt it hides, and scopeward prices it from what the org's own
+// instrumented repositories actually carry. That is what stops the score falling
+// when someone enables a control (issue #27) — and it means part of the number
+// rests on an estimate, which the report has to say out loud rather than let a
+// reader mistake for measurement.
+func scoreEstimate(sc score.Score) string {
+	if sc.Estimated == 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%d of that penalty is estimated: repositories with monitoring off are priced at the debt your instrumented repositories actually carry, so enabling a control never costs you points",
+		sc.Estimated)
+}
+
 // scoreTransition names the number the previous model would have produced.
 //
 // This is the release that rescales the score, so the report itself says so. An

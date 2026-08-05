@@ -89,7 +89,7 @@ func renderScore(out io.Writer, a Audit) {
 // renderScoreBasis prints the shared basis and transition lines beneath the
 // score, subdued so they read as explanation rather than as findings.
 func renderScoreBasis(out io.Writer, sc score.Score) {
-	for _, line := range []string{scoreBasis(sc), scoreTransition(sc)} {
+	for _, line := range []string{scoreBasis(sc), scoreEstimate(sc), scoreTransition(sc)} {
 		if line != "" {
 			fmt.Fprintln(out, "  "+ui.Subtle.Render(line))
 		}

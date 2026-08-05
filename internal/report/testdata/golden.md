@@ -4,7 +4,7 @@
 
 _penalty 99 · 13 not instrumented, 86 open findings · 7.5 per repo across 4 repos_
 
-_the previous scoring model gave 65 (C); per-repo penalty is now a rate, so the number no longer tracks org size_
+_the previous scoring model gave 65 (B); per-repo penalty is now a rate, so the number no longer tracks org size_
 
 1 critical · 2 high · 1 medium · 1 info
 

@@ -23,8 +23,11 @@ func TestGrade(t *testing.T) {
 	if s.Value != 78 {
 		t.Errorf("value = %d, want 78", s.Value)
 	}
-	if s.Grade != "B" {
-		t.Errorf("grade = %q, want B", s.Grade)
+	// A under the re-derived bands (A ≥ 75). Four findings and no repository
+	// denominator is a small absolute penalty, and the bands now describe an
+	// exemplary org rather than a spotless one.
+	if s.Grade != "A" {
+		t.Errorf("grade = %q, want A", s.Grade)
 	}
 	if s.ByAxis[model.AxisIdentity] != 24 {
 		t.Errorf("identity penalty = %d, want 24", s.ByAxis[model.AxisIdentity])
