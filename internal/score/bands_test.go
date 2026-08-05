@@ -69,6 +69,13 @@ func TestBandsAreOrdered(t *testing.T) {
 // penalties three real organizations produced under this model; if a later
 // change moves their letters, that is a decision someone should be making
 // deliberately rather than discovering.
+//
+// The largest org's figure was corrected once: the first audit of it hit the
+// API rate limit mid-scan, four per-repository data kinds came back partial,
+// and the resulting penalty (416) was measured against incomplete data. The
+// completed run reports 529. Worth recording because the coverage section is
+// what caught it — a partial collection looks exactly like a healthier org
+// unless something says out loud what was not read.
 func TestRealOrgsLandWhereMeasured(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -76,7 +83,7 @@ func TestRealOrgsLandWhereMeasured(t *testing.T) {
 		want    string
 	}{
 		{"23 active repos, 15.2 per repo", 208, "F"},
-		{"581 active repos, 15.4 per repo", 416, "F"},
+		{"584 active repos, 26.7 per repo", 529, "F"},
 		{"36 active repos, 45.4 per repo", 613, "F"},
 	} {
 		if got := letter(decay(tc.penalty)); got != tc.want {
