@@ -174,15 +174,48 @@ func decay(penalty float64) int {
 // the previous model's number during the transition.
 func Letter(v int) string { return letter(v) }
 
+// Grade bands, derived from what each letter should mean rather than inherited
+// from the absolute-sum model they were calibrated against.
+//
+// The anchor is A: an exemplary organization — controls on everywhere, residual
+// debt only, a couple of org-level settings short of ideal. That is roughly 1.3
+// penalty per repository plus ~20 absolute, which the decay puts at 75. The
+// remaining bands follow from the rate each should tolerate:
+//
+//	A ≥ 75   ≤ 1.3 per repo   exemplary; residual debt only
+//	B ≥ 65   ≤ 3.4 per repo   solid, with gaps you could name
+//	C ≥ 55   ≤ 6.2 per repo   visible gaps across the estate
+//	D ≥ 40   ≤  13 per repo   systemic gaps
+//	F                          worse
+//
+// 75–100 is consequently dead range, and that is a real cost of leaving the
+// score value alone. No choice of halfLife puts an exemplary org at 90 while
+// keeping the lower bands meaningfully spaced — the decay's shape and the band
+// spacing are in conflict, and moving the letters was chosen over rescaling the
+// number a second time in one release. Reshaping the curve remains open.
+//
+// Calibrated against three real organizations of 23, 36 and 581 active
+// repositories. All three land F, which is the honest reading of their data —
+// two of them are missing push protection or CODEOWNERS on nearly every
+// repository. Worth stating plainly: no organization above F was available to
+// measure, so the A/B/C boundaries rest on the definition above and not on
+// evidence.
+const (
+	gradeA = 75
+	gradeB = 65
+	gradeC = 55
+	gradeD = 40
+)
+
 func letter(v int) string {
 	switch {
-	case v >= 90:
+	case v >= gradeA:
 		return "A"
-	case v >= 75:
+	case v >= gradeB:
 		return "B"
-	case v >= 60:
+	case v >= gradeC:
 		return "C"
-	case v >= 40:
+	case v >= gradeD:
 		return "D"
 	default:
 		return "F"

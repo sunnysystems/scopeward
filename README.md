@@ -124,6 +124,30 @@ scopeward tui --org my-org             # browse findings in an interactive TUI
 > The warning is silent outside a git work tree, when the file is already
 > ignored, and under `--quiet`. It is advisory: it never changes the exit code.
 
+### What the grades mean
+
+The letters are cut by **penalty per repository**, not by an absolute count, so
+they mean the same thing at any organization size:
+
+| Grade | Per-repo rate | Reads as |
+|---|---|---|
+| **A** ≥ 75 | ≤ 1.3 | exemplary — controls on, residual debt only |
+| **B** ≥ 65 | ≤ 3.4 | solid, with gaps you could name |
+| **C** ≥ 55 | ≤ 6.2 | visible gaps across the estate |
+| **D** ≥ 40 | ≤ 13 | systemic gaps |
+| **F** | worse | |
+
+`A` is deliberately not "no findings". An organization doing everything right
+still carries residual debt, and a grade nobody can reach is a grade nobody
+aims at.
+
+Two honest caveats. Scores above 75 are unreachable in practice — no setting of
+the decay constant puts an exemplary organization at 90 while keeping the lower
+bands meaningfully apart, and moving the letters was preferred to rescaling the
+number again. And the bands were calibrated against three real organizations of
+23, 36 and 581 active repositories, **all of which land F**; the A/B/C
+boundaries rest on the definition above rather than on measurement.
+
 ### Exit codes
 
 | Code | Meaning |
