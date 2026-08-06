@@ -26,9 +26,9 @@ scopeward --org acme-co
 ```
 
 That is the whole setup. No account, no agent, no SaaS, no config file. It reads
-your organization with a **read-only** token, scores its governance posture, and
-tells you what to fix — without ever writing to the forge, persisting your token,
-or sending a byte anywhere except the API you pointed it at.
+your organization, scores its governance posture, and tells you what to fix —
+**read-only by construction**: it never writes to the forge, never persists your
+token, and never sends a byte anywhere except the API you pointed it at.
 
 ```text
   scopeward · audit · acme-co
