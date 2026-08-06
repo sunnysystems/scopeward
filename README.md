@@ -127,10 +127,11 @@ scopeward --host https://gitlab.acme.com \
           --org platform                    # self-managed GitLab
 ```
 
-Read-only scopes are enough everywhere: `read:org`, `repo`, `admin:org`,
-`read:user` on GitHub; `read_api`, `read_user` on GitLab. Missing scopes never
-fail the run — the affected checks degrade to *not evaluated* and say so.
-→ [token scopes](docs/entitlements.md#recommended-read-only-scopes)
+Scopes: `read:org`, `repo`, `admin:org`, `read:user` on GitHub; `read_api`,
+`read_user` on GitLab. `scopeward` only ever reads — though note that GitHub's
+classic `repo` scope has no read-only variant, so you can also omit it and let
+the private-repo checks report as *not evaluated*. Missing scopes never fail the
+run. → [token scopes](docs/entitlements.md#recommended-scopes)
 
 ## What it audits
 

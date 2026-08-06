@@ -3,7 +3,7 @@
 `scopeward` is designed for an **organization owner** token, and degrades
 predictably when it does not have one.
 
-## Recommended read-only scopes
+## Recommended scopes
 
 GitHub (classic PAT):
 
@@ -17,9 +17,16 @@ GitHub (classic PAT):
 GitLab: `read_api` and `read_user`. Use `--host https://gitlab.example.com` for
 a self-managed instance; the provider is inferred from the host.
 
-Every one of these is a **read** scope. The tool has no code path that writes to
-either forge — see [SECURITY.md](../SECURITY.md) for how that guarantee is
-scoped and what breaking it would look like.
+`scopeward` only ever reads. It has no code path that writes to either forge,
+and a way to make one write is a vulnerability rather than a bug — see
+[SECURITY.md](../SECURITY.md).
+
+One honest caveat about the token you create for it: GitHub's classic `repo`
+scope has **no read-only variant**. It is the coarsest scope on the list and it
+grants write on paper, whatever this tool does with it. If that is not a
+trade you want to make, audit only public repositories by omitting it and let
+the private-repo checks report as *not evaluated* — a narrower audit you can
+justify beats a broader one you cannot.
 
 ## Missing scopes never fail the run
 
