@@ -1,8 +1,8 @@
 name: scopeward
 description: >-
-  Audit GitHub organization governance — human identities, teams and
-  permissions, non-human identities, and the AI agents committing your code.
-  Read-only; never writes to GitHub and never persists your token.
+  Audit GitHub and GitLab governance — human identities, teams and permissions,
+  machine identities, and the AI agents committing your code. Read-only; never
+  writes to the forge and never persists your token.
 author: Sunny Systems
 
 branding:
