@@ -45,6 +45,48 @@ var severityWeight = map[model.Severity]int{
 	model.SevInfo:     0,
 }
 
+// volumeCap bounds how far standing for many items may multiply a finding's
+// weight.
+//
+// The cap is load-bearing, not a safety rail. An uncapped log₂ puts a single
+// 99-alert repository at 166 points — more than a third of a real
+// organization's entire penalty — so one repository would dominate a number
+// meant to describe an estate. Three times the worst case is as much as any
+// single finding may say.
+const volumeCap = 3.0
+
+// weigh is what one finding costs before the unknown is priced: its severity
+// weight, scaled sub-linearly by how many underlying items it stands for.
+//
+//	weight = severityWeight × min(1 + log₂(n)/4, 3)
+//
+// n=1 → 1.0× (exactly today's weight, so nothing moves for the ~78 checks that
+// report a single thing), n=10 → 1.83×, n=99 → 2.66×, capped at 3× from n=256.
+//
+// Severity keeps tracking the worst item, which was always right: a repository
+// with one critical CVE and a repository with one critical plus ninety-eight
+// others are both critical. What was wrong is that they were also both 25
+// points (issue #31). How bad is the worst one and how many are there are two
+// questions, and the score used to answer only the first — leaving a report that
+// could not tell a reviewer of 198 flagged repositories where to start.
+//
+// Sub-linear because the second CVE in a repository is not as bad as the first:
+// the fix is one dependency bump either way, and the marginal risk of one more
+// known vulnerability in an already-vulnerable repository is not the risk of
+// going from clean to vulnerable.
+func weigh(f model.Finding) float64 {
+	return float64(severityWeight[f.Severity]) * volumeFactor(f.Count())
+}
+
+// volumeFactor is the multiplier for a finding standing for n items. Read n
+// through model.Finding.Count(), never the raw field: log₂(0) is -Inf.
+func volumeFactor(n int) float64 {
+	if n <= 1 {
+		return 1
+	}
+	return math.Min(1+math.Log2(float64(n))/4, volumeCap)
+}
+
 // Scale is the size of what was audited, so per-repository penalty can be
 // expressed as a rate rather than a sum.
 type Scale struct {

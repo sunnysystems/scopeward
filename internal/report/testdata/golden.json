@@ -7,12 +7,12 @@
   },
   "collected_at": "2025-05-30T10:13:20Z",
   "score": {
-    "value": 50,
-    "grade": "D",
-    "penalty": 99,
-    "penalty_absolute": 54,
-    "value_absolute": 65,
-    "per_repo": 7.5,
+    "value": 35,
+    "grade": "F",
+    "penalty": 183,
+    "penalty_absolute": 88,
+    "value_absolute": 53,
+    "per_repo": 15.925495973091813,
     "active_repos": 4,
     "by_severity": {
       "critical": 1,
@@ -22,12 +22,12 @@
     },
     "by_axis": {
       "ai_agents": 12,
-      "code_security": 75,
+      "code_security": 159,
       "identity": 12
     },
     "by_kind": {
-      "coverage": 13,
-      "debt": 86
+      "coverage": 12,
+      "debt": 171
     }
   },
   "findings": [

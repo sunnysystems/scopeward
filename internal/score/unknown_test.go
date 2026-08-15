@@ -149,6 +149,78 @@ func TestEstimateOnlyEverRaises(t *testing.T) {
 	}
 }
 
+// TestVolumeRaisesWhatADisabledControlCosts pins the indirect movement volume
+// weighting causes, because it is the one nobody would look for.
+//
+// Weighting debt by volume raises the observed rate estimateUnknown learns
+// from, so it also raises the price of a disabled control — two numbers move,
+// and only the first is where the change was made. That is the intended
+// reading: an organization whose instrumented repositories carry backlogs of
+// forty is telling us its dark repositories probably hide more than one whose
+// repositories carry single alerts.
+func TestVolumeRaisesWhatADisabledControlCosts(t *testing.T) {
+	// Two orgs of ten repositories, identical in every respect except how much
+	// debt each visible finding stands for: two dark repos, six instrumented and
+	// alerting, two instrumented and clean.
+	org := func(volume int) []model.Finding {
+		f := []model.Finding{ctrlOff("dark-1"), ctrlOff("dark-2")}
+		for i := 0; i < 6; i++ {
+			alert := openAlerts("visible", model.SevCritical)
+			alert.Volume = volume
+			f = append(f, alert)
+		}
+		return f
+	}
+
+	single := Grade(org(1), Scale{ActiveRepos: 10})
+	backlog := Grade(org(99), Scale{ActiveRepos: 10})
+
+	if backlog.Estimated <= single.Estimated {
+		t.Errorf("dark repositories cost %d where peers carry backlogs of 99 and %d where peers carry one alert:"+
+			" the estimate is not learning from volume, so it prices the unknown below what looking reveals",
+			backlog.Estimated, single.Estimated)
+	}
+}
+
+// TestEnablingAControlNeverRaisesThePenalty_WithBacklogs is #27's invariant
+// re-proved on the model volume weighting produces, and it holds for one
+// reason: estimateUnknown prices the unknown with the same weight function that
+// charges the revealed finding. The estimate is the average cost of an
+// instrumented repository measured exactly as the dark ones will be charged, so
+// when the dark repositories turn out to look like the instrumented ones, the
+// two sides cancel.
+//
+// Summing raw severity in the estimate while charging volume-scaled weight on
+// the finding would break this by construction, and it is a one-line mistake to
+// make while refactoring.
+func TestEnablingAControlNeverRaisesThePenalty_WithBacklogs(t *testing.T) {
+	const repos = 10
+
+	before := []model.Finding{}
+	for i := 0; i < 5; i++ {
+		alert := openAlerts("instrumented", model.SevCritical)
+		alert.Volume = 99
+		before = append(before, alert)
+	}
+	for i := 0; i < 5; i++ {
+		before = append(before, ctrlOff("dark"))
+	}
+
+	after := []model.Finding{}
+	for i := 0; i < 10; i++ {
+		alert := openAlerts("now-visible", model.SevCritical)
+		alert.Volume = 99
+		after = append(after, alert)
+	}
+
+	b := Grade(before, Scale{ActiveRepos: repos})
+	a := Grade(after, Scale{ActiveRepos: repos})
+
+	if a.Penalty > b.Penalty {
+		t.Errorf("enabling monitoring raised the penalty %d → %d once debt carries volume", b.Penalty, a.Penalty)
+	}
+}
+
 // TestEstimateRequiresADenominator: with the per-repo pass skipped there is no
 // instrumented count, so there is nothing to estimate from and nothing may be
 // invented.
