@@ -17,6 +17,42 @@ hundred.
 Without normalization every large organization scores F by arithmetic alone,
 and the number stops carrying information about how the org is actually run.
 
+## Ninety-nine open CVEs do not weigh like one
+
+A finding is not always one thing. `acme/api has 42 open Dependabot alert(s)` is
+forty-two things reported as one row, and until recently it scored exactly what a
+repository with a single alert scored. A report of 198 flagged repositories that
+prices them all identically cannot tell a reviewer where to start, which is most
+of what the report is for.
+
+So weight scales with the count, sub-linearly and with a ceiling:
+
+```text
+weight = severity weight × min(1 + log₂(n)/4, 3)
+```
+
+| open alerts | multiplier |
+|---:|---:|
+| 1 | 1.00× |
+| 10 | 1.83× |
+| 99 | 2.66× |
+| 256 or more | 3.00× (capped) |
+
+Sub-linear because the second known vulnerability in a repository is not as bad
+as the first: it is the same dependency bump either way, and the repository was
+already exposed. Capped because without a ceiling a single 99-alert repository
+lands at 166 points — over a third of a real organization's whole penalty — and
+the score would describe its worst repository rather than its estate.
+
+Severity is untouched by this: it still tracks the **worst** item, so a
+repository with one critical and ninety-eight lows is critical. How bad is the
+worst one and how many are there are two questions, and the score now answers
+both. The counts in the summary stay counts of findings — "3 critical" means
+three findings, never three hundred alerts.
+
+Checks that report a single thing — around seventy-eight of them — are
+unaffected: n=1 is exactly 1.00×.
+
 ## What the grades mean
 
 The letters are cut by penalty per repository, so they mean the same thing at
@@ -67,6 +103,19 @@ improve or hold.
 The estimated portion is always disclosed — in the terminal, in the HTML report,
 and as `estimated` in `--format json`. A score partly built on an assumption has
 to say which part.
+
+One honest limit, since weighting debt by volume made the estimate an estimate of
+a bigger number. The price of a dark repository is learned from your own
+instrumented ones, measured exactly as the dark ones will be charged once you can
+see them, so it holds whenever what you light up resembles what you already see:
+across 800 simulated enablement campaigns, from 10% to 90% of repositories dark,
+the penalty fell every single time. It does not hold in one shape — an
+organization with no observed debt at all, whose unmonitored repositories each
+turn out to hide a large backlog. There the estimate had nothing to learn from,
+priced from the prior, and the prior was wrong. Closing that case means pricing
+every unmonitored repository as though it hid the maximum, which measures out at
+64% of the score being assumption. A number mostly made of assumption is a worse
+instrument than a guarantee that holds against evidence.
 
 ## Coverage and debt are two different axes
 

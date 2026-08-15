@@ -77,3 +77,25 @@ func TestGrade_Clean(t *testing.T) {
 		t.Errorf("clean audit = %d/%s, want 100/A", s.Value, s.Grade)
 	}
 }
+
+// TestSeverityWeightsUnchanged guards the transition baseline. Every number in
+// the score-model epic's worked example, and every adopter's current score, is
+// computed from these; a quiet edit here would make the v1-versus-v2 comparison
+// meaningless before it is ever drawn.
+func TestSeverityWeightsUnchanged(t *testing.T) {
+	want := map[model.Severity]int{
+		model.SevCritical: 25,
+		model.SevHigh:     12,
+		model.SevMedium:   5,
+		model.SevLow:      2,
+		model.SevInfo:     0,
+	}
+	for sev, w := range want {
+		if got := severityWeight[sev]; got != w {
+			t.Errorf("%s weighs %d, baseline is %d", sev, got, w)
+		}
+	}
+	if halfLife != 100.0 {
+		t.Errorf("halfLife is %v, baseline is 100", halfLife)
+	}
+}

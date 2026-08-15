@@ -34,10 +34,10 @@ type Finding struct {
 	// one both mean "just this one".
 	//
 	// It exists because severity and weight are different questions, and the
-	// score currently conflates them: a repo with one critical CVE and a repo
-	// with one critical plus ninety-eight others are the same 25 points (issue
-	// #31). Severity should stay driven by the worst item; weight should not
-	// ignore how many there are.
+	// score used to conflate them: a repo with one critical CVE and a repo with
+	// one critical plus ninety-eight others were the same 25 points (issue #31).
+	// Severity stays driven by the worst item; weight is scaled by the count,
+	// sub-linearly and with a ceiling (see internal/score, issue #70).
 	Volume int `json:"volume,omitempty"`
 	// Kind is the axis this finding moves: coverage (a control is off) or debt
 	// (a thing exists). Stamped by the check Runner from the check's metadata

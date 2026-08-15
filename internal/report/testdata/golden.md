@@ -1,10 +1,10 @@
 # scopeward: Acme Corp (acme)
 
-**Governance score: 50/100 (D)**
+**Governance score: 35/100 (F)**
 
-_penalty 99 · 13 not instrumented, 86 open findings · 7.5 per repo across 4 repos_
+_penalty 183 · 12 not instrumented, 171 open findings · 15.9 per repo across 4 repos_
 
-_the previous scoring model gave 65 (B); per-repo penalty is now a rate, so the number no longer tracks org size_
+_the previous scoring model gave 53 (D); per-repo penalty is now a rate, so the number no longer tracks org size_
 
 1 critical · 2 high · 1 medium · 1 info
 

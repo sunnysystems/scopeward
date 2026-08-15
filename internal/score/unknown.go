@@ -24,8 +24,8 @@ var MonitoringControls = map[string]string{
 	"codesecurity.repo-dependabot-alerts-off": "codesecurity.open-dependabot-alerts",
 }
 
-// unknownFloor is the least a disabled control may cost: the weight of the worst
-// finding the paired check could produce for one repository.
+// unknownFloor is the least a disabled control may cost: one critical finding
+// standing for a single item.
 //
 // The floor, not the average, is what delivers the guarantee. An average alone
 // fails in the ordinary case — an org whose instrumented repositories happen to
@@ -36,13 +36,38 @@ var MonitoringControls = map[string]string{
 //
 // Pricing an unexamined repository as though it held a critical finding is
 // deliberately pessimistic, and that is the honest reading of not looking: the
-// repository could hold one, and nobody knows. It also makes the incentive
-// point the right way — enabling monitoring can only reveal something worth at
-// most this much, so it can only improve the number or leave it alone.
+// repository could hold one, and nobody knows.
 //
-// This holds because a paired check emits at most one finding per repository.
-// A check that could emit several would need a higher floor, which is a
-// constraint on what may be paired, not a detail of the arithmetic.
+// # What volume weighting did to this number
+//
+// Before #70 the floor was also a ceiling: a revealed finding could not weigh
+// more than one critical, so enabling a control could never raise the penalty,
+// for any repository, under any data. Volume weighting ends that. A revealed
+// backlog reaches 3× (see volumeCap), and a floor that kept the old promise
+// would have to price every dark repository at 75.
+//
+// It was measured rather than argued. At a floor of 75 a normal 584-repository
+// org lands at penalty 268 with 64% of it estimated, against 144 with 34%
+// estimated at the current floor — a full grade band lost by every adopter, on
+// no change in their organization, to buy back a case the evidence says does not
+// happen. A score mostly made of assumption is a worse instrument than a
+// guarantee that holds against evidence, so the floor stays where it is.
+//
+// What holds instead: the estimate and the measurement share a weight function
+// (see estimateUnknown), so the price of a dark repository is the measured cost
+// of an instrumented one. When the repositories being lit up resemble the estate,
+// the two sides cancel — 800 simulated enablement campaigns across 10% to 90%
+// dark, and not one raised the penalty.
+//
+// What does not hold: an org with no observed debt at all, every one of whose
+// dark repositories hides a backlog, can see its penalty rise on enabling. The
+// estimator has no evidence in that case and prices from the prior, and the
+// prior is wrong. It is a real hole, it is stated in docs/scoring.md rather than
+// papered over, and closing it costs more than it is worth.
+//
+// This all holds because a paired check emits at most one finding per
+// repository. A check that could emit several would need a higher floor, which
+// is a constraint on what may be paired, not a detail of the arithmetic.
 var unknownFloor = float64(severityWeight[model.SevCritical])
 
 // estimateUnknown returns, per control-off check ID, what one disabled control
@@ -75,7 +100,16 @@ func estimateUnknown(findings []model.Finding, activeRepos int) map[string]float
 	for control, revealed := range MonitoringControls {
 		for _, f := range findings {
 			if f.CheckID == revealed {
-				debtTotal[control] += float64(severityWeight[f.Severity])
+				// Priced with the same weight function as the revealed finding
+				// itself, volume included. That equality is what keeps #27's
+				// guarantee standing: the estimate is the average cost of one
+				// instrumented repository measured exactly as it will be charged
+				// once the dark ones are measured, so an org whose repositories
+				// carry backlogs of forty prices its dark repositories from
+				// backlogs of forty and not from single alerts. Summing raw
+				// severity here while charging volume-scaled weight there would
+				// price the unknown below what looking reveals, by construction.
+				debtTotal[control] += weigh(f)
 			}
 		}
 	}
@@ -106,11 +140,13 @@ func estimateUnknown(findings []model.Finding, activeRepos int) map[string]float
 // estimated to hide.
 //
 // The max is the guarantee. If a disabled control never costs less than the
-// typical cost of having it enabled, then enabling it can never raise the
-// penalty — which is exactly what #27 asks for, stated as an invariant rather
-// than as a hope about calibration.
+// typical cost of having it enabled, then enabling it cannot raise the penalty
+// of an estate that resembles itself — which is what #27 asks for, stated as an
+// invariant rather than as a hope about calibration. "Typical" is doing real
+// work in that sentence now that debt carries volume; unknownFloor spells out
+// exactly how much.
 func pricedWeight(f model.Finding, estimates map[string]float64) (weight, estimated float64) {
-	base := float64(severityWeight[f.Severity])
+	base := weigh(f)
 	est, ok := estimates[f.CheckID]
 	if !ok || est <= base {
 		return base, 0
