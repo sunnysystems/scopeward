@@ -162,7 +162,7 @@ CI/CD variables, runners usable from unprotected refs, and a disabled
 | `--format json` | machine-readable findings + coverage for pipelines |
 | `--format sarif` | SARIF 2.1.0 for GitHub code scanning and security tooling |
 | `--format markdown` | Markdown (rendered in-terminal on a TTY, raw otherwise) |
-| `--html report.html [--open]` | self-contained branded HTML report; no server, opens in the browser |
+| `--html report.html [--open]` | self-contained branded HTML report, with who can reach what by member and by repository; no server, opens in the browser |
 | `--fail-on high` | exit non-zero when a finding at or above a severity exists (CI gate) |
 | `--baseline prior.json [--new-only]` | diff against a prior run; report or fail only on *new* findings |
 | `--fix-script fixes.sh` | suggested `gh` commands, **all commented out** — nothing runs until you uncomment |

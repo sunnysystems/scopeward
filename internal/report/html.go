@@ -35,6 +35,7 @@ type htmlView struct {
 	Severities       []sevCount
 	Axes             []axisGroup
 	TeamDesign       *teamDesignView
+	Access           *accessHTMLView
 	NotEvaluated     []nevalView
 	PartlyEvaluated  []limitedView
 	AcceptedRisks    []acceptedRiskView
@@ -102,6 +103,7 @@ type problemItem struct {
 	Evidence      string
 	GHFix         string
 	GHVerify      string
+	AccessAnchor  string // the Access row this finding is about, if it has one
 }
 
 type nevalView struct {
@@ -171,11 +173,13 @@ func buildHTMLView(a Audit) htmlView {
 		Severities:      severityTally(a.Score),
 		Axes:            groupByAxis(a.Report.Findings),
 		TeamDesign:      teamDesignHTML(summarizeTeamDesign(a.Snapshot)),
+		Access:          buildAccessHTML(a.Snapshot),
 		NotEvaluated:    nevalViews(a.Report.Skipped),
 		PartlyEvaluated: limitedViews(a.Report.Limited),
 		Coverage:        covViews(a.Snapshot.Coverage),
 	}
 	v.AxisCount = len(v.Axes)
+	linkFindingsToAccess(&v)
 	v.CoverageSummary = coverageSummary(v.Coverage)
 	v.Suggestions = filterSuggestions(a.Report.Findings)
 	v.AcceptedRisks, v.SuppressionDelta = acceptedRiskViews(a)
@@ -397,6 +401,7 @@ func toProblemGroup(fs []model.Finding) problemGroup {
 			Evidence:      evidenceJSON(f.Evidence),
 			GHFix:         f.GHFix,
 			GHVerify:      f.GHVerify,
+			AccessAnchor:  findingAccessAnchor(f.Resource),
 		})
 	}
 
