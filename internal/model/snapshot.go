@@ -271,6 +271,15 @@ type AgentWorkflow struct {
 	// Interpolated are untrusted event fields expanded straight into the
 	// agent's inputs or script, e.g. "github.event.issue.body".
 	Interpolated []string `json:"interpolated,omitempty"`
+	// What the agent itself can reach, as opposed to the job around it.
+	// ReadOnly: its tools only read files (no shell, no edits, no network).
+	// Credentials: what its own environment holds — a GitHub token in its env,
+	// the token the action works with, a secret passed to its step, a token an
+	// earlier checkout left in .git/config. OutputExecuted: a later step
+	// expands its output into a script, handing the job's reach back.
+	ReadOnly       bool     `json:"read_only,omitempty"`
+	Credentials    []string `json:"credentials,omitempty"`
+	OutputExecuted bool     `json:"output_executed,omitempty"`
 }
 
 // CodeownersRule is one CODEOWNERS line: a gitignore-style pattern and the

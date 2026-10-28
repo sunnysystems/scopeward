@@ -163,3 +163,48 @@ func TestAgentInventory_CIAgents(t *testing.T) {
 		}
 	}
 }
+
+// #83: price what the agent reaches, not only what the job holds. A hardened
+// triage job holds actions and statuses write, and its agent can touch none of it.
+func TestAgentWorkflow_AgentReach(t *testing.T) {
+	jobWrite := func(aw *model.AgentWorkflow) {
+		aw.Via, aw.Agent = "google-github-actions/run-gemini-cli@v0", "Gemini CLI"
+		aw.Gate = "none"
+		aw.WriteScopes = []string{"actions", "id-token", "issues", "statuses"}
+		aw.Secrets = []string{"METRICS_KEY"} // a later step's: out of reach without a shell
+		aw.ReadOnly = true
+	}
+	cases := []struct {
+		name   string
+		mutate func(*model.AgentWorkflow)
+		want   model.Severity
+		phrase string
+	}{
+		{"contained", func(aw *model.AgentWorkflow) {}, model.SevLow, "read-only tools and no credential"},
+		{"read-only holding the persisted checkout token", func(aw *model.AgentWorkflow) {
+			aw.Credentials = []string{"checkout credentials persisted in .git/config"}
+		}, model.SevHigh, "write access"},
+		{"read-only holding a secret in its own step", func(aw *model.AgentWorkflow) {
+			aw.WriteScopes = []string{"issues"}
+			aw.Credentials = []string{"secret DEPLOY_KEY"}
+		}, model.SevHigh, "secrets in reach"},
+		{"output run by a later step", func(aw *model.AgentWorkflow) { aw.OutputExecuted = true }, model.SevHigh, "write access and secrets in reach"},
+		{"not read-only", func(aw *model.AgentWorkflow) { aw.ReadOnly = false }, model.SevHigh, "write access and secrets in reach"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			job := agentJob("none", func(aw *model.AgentWorkflow) {
+				jobWrite(aw)
+				tc.mutate(aw)
+			})
+			r := model.Repo{Name: "cli", AgentWorkflows: []model.AgentWorkflow{job}}
+			got := runAgentWorkflowCheck(t, agentWorkflowSnapshot("read", r))
+			if len(got) != 1 || got[0].Severity != tc.want || !strings.HasSuffix(got[0].Title, tc.phrase) {
+				t.Fatalf("got %+v, want %v ending %q", got, tc.want, tc.phrase)
+			}
+			if tc.name == "contained" && (!strings.Contains(got[0].Description, "shapes its output") || strings.Contains(got[0].Description, "OIDC")) {
+				t.Errorf("contained description: %q", got[0].Description)
+			}
+		})
+	}
+}

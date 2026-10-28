@@ -2,6 +2,7 @@ package collect
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/sunnysystems/scopeward/internal/model"
@@ -40,6 +41,7 @@ jobs:
 		Gate:              "closed",
 		WriteScopes:       []string{"contents", "pull-requests"},
 		ModelSecrets:      []string{"ANTHROPIC_API_KEY"},
+		Credentials:       []string{"checkout credentials persisted in .git/config", "the action's own GitHub token"},
 	}
 	if !reflect.DeepEqual(aw, want) {
 		t.Errorf("got  %+v\nwant %+v", aw, want)
@@ -150,6 +152,113 @@ jobs:
 `)
 	if !reflect.DeepEqual(aw.Secrets, []string{"METRICS_KEY"}) {
 		t.Errorf("secrets = %v, want [METRICS_KEY] only", aw.Secrets)
+	}
+}
+
+// The hardened triage pattern: the agent only reads files, its step blanks
+// the token, the checkout keeps no credentials, the issue arrives as a file,
+// and a later step parses the agent's output as data.
+const hardenedTriage = `
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+  actions: write
+  statuses: write
+jobs:
+  triage:
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          private-key: ${{ secrets.PRIVATE_KEY }}
+      - run: echo "$BODY" > issue.md
+        env:
+          BODY: ${{ github.event.issue.body }}
+      - id: agent
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GITHUB_TOKEN: ''
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          settings: |-
+            { "tools": { "core": ["read_file", "glob"] } }
+          prompt: Read issue.md and pick one label.
+      - uses: actions/github-script@v7
+        env:
+          LABELS: ${{ steps.agent.outputs.summary }}
+        with:
+          github-token: ${{ steps.app.outputs.token }}
+          script: |
+            const labels = JSON.parse(process.env.LABELS)
+`
+
+func TestScanAgentWorkflows_AgentReach(t *testing.T) {
+	aw := scanOne(t, hardenedTriage)
+	if !aw.ReadOnly || aw.Credentials != nil || aw.OutputExecuted {
+		t.Errorf("hardened triage: read-only %v, credentials %v, output executed %v; want read-only, none, false",
+			aw.ReadOnly, aw.Credentials, aw.OutputExecuted)
+	}
+
+	cases := []struct {
+		name, from, to string
+		check          func(model.AgentWorkflow) bool
+	}{
+		{"a shell tool is not read-only", `"core": ["read_file", "glob"]`, `"core": ["read_file", "run_shell_command(gh)"]`,
+			func(aw model.AgentWorkflow) bool { return !aw.ReadOnly }},
+		{"a web fetch is an exfiltration channel", `"core": ["read_file", "glob"]`, `"core": ["read_file", "web_fetch"]`,
+			func(aw model.AgentWorkflow) bool { return !aw.ReadOnly }},
+		{"no allowlist means the defaults", `{ "tools": { "core": ["read_file", "glob"] } }`, `{}`,
+			func(aw model.AgentWorkflow) bool { return !aw.ReadOnly }},
+		{"the job's token reaches an agent step that does not blank it", "          GITHUB_TOKEN: ''\n", "          FOO: bar\n",
+			func(aw model.AgentWorkflow) bool {
+				return reflect.DeepEqual(aw.Credentials, []string{"env GITHUB_TOKEN"})
+			}},
+		{"a checkout that persists credentials puts the token in .git/config", "persist-credentials: false", "fetch-depth: 1",
+			func(aw model.AgentWorkflow) bool {
+				return reflect.DeepEqual(aw.Credentials, []string{"checkout credentials persisted in .git/config"})
+			}},
+		{"output expanded into a later script runs", "            const labels = JSON.parse(process.env.LABELS)",
+			"            const labels = ${{ steps.agent.outputs.summary }}",
+			func(aw model.AgentWorkflow) bool { return aw.OutputExecuted }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(hardenedTriage, tc.from) {
+				t.Fatalf("fixture has no %q", tc.from)
+			}
+			aw := scanOne(t, strings.Replace(hardenedTriage, tc.from, tc.to, 1))
+			if !tc.check(aw) {
+				t.Errorf("got read-only %v, credentials %v, output executed %v", aw.ReadOnly, aw.Credentials, aw.OutputExecuted)
+			}
+		})
+	}
+}
+
+func TestScanAgentWorkflows_CodexReadOnlySandbox(t *testing.T) {
+	aw := scanOne(t, `
+on: issues
+jobs:
+  codex:
+    steps:
+      - uses: openai/codex-action@v1
+        with:
+          allow-users: "*"
+          safety-strategy: read-only
+`)
+	if !aw.ReadOnly || aw.Credentials != nil {
+		t.Errorf("read-only %v credentials %v, want read-only and none", aw.ReadOnly, aw.Credentials)
+	}
+	// Without it the action runs the workspace-write sandbox.
+	if aw := scanOne(t, "on: issues\njobs:\n  c:\n    steps:\n      - uses: openai/codex-action@v1\n"); aw.ReadOnly {
+		t.Error("default codex sandbox read as read-only")
 	}
 }
 
