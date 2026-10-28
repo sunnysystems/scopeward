@@ -35,7 +35,6 @@ func joinLogins(ls []string) string {
 	return s + "]"
 }
 
-
 func TestForRepo_TeamTree(t *testing.T) {
 	g := Build(org())
 	api, _ := g.ForRepo("api")
