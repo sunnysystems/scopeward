@@ -173,7 +173,7 @@ terminal. The action installs a checksum-verified release — no Go toolchain in
 the critical path of a governance control:
 
 ```yaml
-- uses: sunnysystems/scopeward@v0.2.1
+- uses: sunnysystems/scopeward@v0.3.0
   env:
     GITHUB_TOKEN: ${{ secrets.SCOPEWARD_TOKEN }}   # env only — never an input
   with:

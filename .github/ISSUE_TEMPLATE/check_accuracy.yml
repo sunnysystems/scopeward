@@ -54,6 +54,6 @@ body:
     id: version
     attributes:
       label: Version
-      placeholder: scopeward v0.2.1
+      placeholder: scopeward v0.3.0
     validations:
       required: true
