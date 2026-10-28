@@ -173,6 +173,12 @@ type Repo struct {
 	// top of one adds a second, parallel mechanism rather than fixing the weak rule.
 	BranchProtectionSource string          `json:"branch_protection_source,omitempty"`
 	WorkflowIssues         []WorkflowIssue `json:"workflow_issues,omitempty"`
+	// AgentWorkflows are the Actions jobs that run an AI coding agent.
+	// UntrustedExternalCalls are jobs a non-writer can trigger that hand off to a
+	// reusable workflow in another repository ("file#job -> ref"): what runs
+	// there was not read, so it is reported as not assessed, never as clean.
+	AgentWorkflows         []AgentWorkflow `json:"agent_workflows,omitempty"`
+	UntrustedExternalCalls []string        `json:"untrusted_external_calls,omitempty"`
 	// Ownership signals. Properties holds this repo's org custom-property values
 	// (lowercased keys). CodeownersPresent is nil when not assessed; CodeownersTeams
 	// are the team references (@org/team) found in the CODEOWNERS file.
@@ -218,6 +224,40 @@ type WorkflowIssue struct {
 	File   string `json:"file"`
 	Kind   string `json:"kind"`   // "unpinned-action" | "internal-unpinned-action" | "pull-request-target"
 	Detail string `json:"detail"` // e.g. the action reference
+}
+
+// AgentWorkflow is an Actions job that runs an AI coding agent: what an
+// outsider needs to steer it, and what it can reach if they do. The collector
+// records facts only; the check decides what they are worth.
+type AgentWorkflow struct {
+	File  string `json:"file"`
+	Job   string `json:"job"`   // "triage", or "call -> review.yml#run" through a same-repo reusable workflow
+	Agent string `json:"agent"` // e.g. "Claude Code"
+	Via   string `json:"via"`   // the action reference, or "run" for an agent CLI in a script
+	// UntrustedTriggers are the workflow's events a non-writer can fire that
+	// reach the agent past the job's and the step's if: conditions, which are
+	// evaluated per event. Empty with Gate "closed" when those conditions
+	// refuse non-writers on every such event.
+	UntrustedTriggers []string `json:"untrusted_triggers,omitempty"`
+	// Gate is whether an actor without write access gets past the agent:
+	// "closed" (refused), "named" (admitted by name), "open" (anyone admitted),
+	// "none" (nothing checks the actor). GateDetail is the input or condition
+	// that decided it.
+	Gate       string `json:"gate"`
+	GateDetail string `json:"gate_detail,omitempty"`
+	// WriteScopes are the token permissions the job is granted at write ("all"
+	// for write-all). TokenDefault means no permissions block applies, so the
+	// token gets the org default.
+	WriteScopes  []string `json:"write_scopes,omitempty"`
+	TokenDefault bool     `json:"token_default,omitempty"`
+	// Secrets are those the job references beyond GITHUB_TOKEN and the model's
+	// own credential ("*" when a reusable call passes secrets: inherit);
+	// ModelSecrets are the credentials handed to the agent itself.
+	Secrets      []string `json:"secrets,omitempty"`
+	ModelSecrets []string `json:"model_secrets,omitempty"`
+	// Interpolated are untrusted event fields expanded straight into the
+	// agent's inputs or script, e.g. "github.event.issue.body".
+	Interpolated []string `json:"interpolated,omitempty"`
 }
 
 // Ruleset is an organization repository ruleset (the /settings/rules page):
