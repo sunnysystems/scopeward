@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path"
@@ -26,7 +27,13 @@ type agentAction struct {
 	gate  func(with map[string]string) (state, detail string)
 	// modelKeys are the inputs that carry the model's own credential.
 	modelKeys []string
-	source    string
+	// readOnly reports whether the step's inputs restrict the agent to tools
+	// that only read files: no shell, no edits, no network.
+	readOnly func(with map[string]string) bool
+	// actionToken means the action itself operates with a GitHub token (to
+	// comment, push, open pull requests), so one is always in the agent's reach.
+	actionToken bool
+	source      string
 }
 
 var agentActions = []agentAction{
@@ -44,7 +51,9 @@ var agentActions = []agentAction{
 			return listGate("allowed_bots", w["allowed_bots"])
 		},
 		modelKeys: []string{"anthropic_api_key", "claude_code_oauth_token"},
-		source:    "https://github.com/anthropics/claude-code-action/blob/main/docs/security.md",
+		// Its own GitHub tools run on the App token or the github_token input.
+		actionToken: true,
+		source:      "https://github.com/anthropics/claude-code-action/blob/main/docs/security.md",
 	},
 	{
 		agent: "Codex", repo: "openai/codex-action", gated: true,
@@ -58,12 +67,17 @@ var agentActions = []agentAction{
 			return listGate("allow-bot-users", w["allow-bot-users"])
 		},
 		modelKeys: []string{"openai-api-key"},
-		source:    "https://github.com/openai/codex-action",
+		// Without either input the action runs the workspace-write sandbox.
+		readOnly: func(w map[string]string) bool {
+			return w["safety-strategy"] == "read-only" || w["permission-profile"] == ":read-only" || w["sandbox"] == "read-only"
+		},
+		source: "https://github.com/openai/codex-action",
 	},
 	{
 		// Documents no actor check of its own: the workflow's if: is the gate.
 		agent: "Gemini CLI", repo: "google-github-actions/run-gemini-cli",
 		modelKeys: []string{"gemini_api_key", "google_api_key"},
+		readOnly:  geminiReadOnly,
 		source:    "https://github.com/google-github-actions/run-gemini-cli",
 	},
 }
@@ -133,6 +147,7 @@ type wfJob struct {
 }
 
 type wfStep struct {
+	ID   string         `yaml:"id"`
 	If   any            `yaml:"if"`
 	Uses string         `yaml:"uses"`
 	Run  string         `yaml:"run"`
@@ -260,18 +275,22 @@ func agentJobs(d *wfDoc, j wfJob, triggers []string, repo string) []model.AgentW
 	jobReach := admitted(j.If, triggers, repo)
 	byAgent := map[string]*hit{}
 	for i, st := range j.Steps {
-		agent, via, gate, detail, keyInputs := identifyStep(st)
-		if agent == "" {
+		sa, ok := identifyStep(st)
+		if !ok {
 			continue
 		}
-		h := byAgent[agent]
+		h := byAgent[sa.agent]
 		if h == nil {
-			h = &hit{aw: model.AgentWorkflow{Agent: agent, Via: via}, order: i}
-			byAgent[agent] = h
+			// Read-only until a step of the same agent says otherwise.
+			h = &hit{aw: model.AgentWorkflow{Agent: sa.agent, Via: sa.via, ReadOnly: true}, order: i}
+			byAgent[sa.agent] = h
 		}
-		h.steps = append(h.steps, step{gate: gate, detail: detail, cond: st.If, reach: admitted(st.If, jobReach, repo)})
-		h.aw.ModelSecrets = append(h.aw.ModelSecrets, modelSecrets(st, keyInputs)...)
+		h.steps = append(h.steps, step{gate: sa.gate, detail: sa.detail, cond: st.If, reach: admitted(st.If, jobReach, repo)})
+		h.aw.ModelSecrets = append(h.aw.ModelSecrets, modelSecrets(st, sa.modelKeys)...)
 		h.aw.Interpolated = append(h.aw.Interpolated, interpolated(st)...)
+		h.aw.ReadOnly = h.aw.ReadOnly && sa.readOnly
+		h.aw.Credentials = append(h.aw.Credentials, agentCredentials(d, j, i, sa)...)
+		h.aw.OutputExecuted = h.aw.OutputExecuted || outputExecuted(j, i)
 	}
 	if len(byAgent) == 0 {
 		return nil
@@ -316,6 +335,7 @@ func agentJobs(d *wfDoc, j wfJob, triggers []string, repo string) []model.AgentW
 		aw.ModelSecrets = dedupe(aw.ModelSecrets)
 		aw.Secrets = without(jobSecrets(d, j, h.order), aw.ModelSecrets)
 		aw.Interpolated = dedupe(aw.Interpolated)
+		aw.Credentials = dedupe(aw.Credentials)
 		out = append(out, aw)
 	}
 	return out
@@ -336,10 +356,21 @@ func orderedEvents(events []string) []string {
 	return out
 }
 
-// identifyStep names the agent a step runs, if any, and the gate it applies on
-// its own: "closed" for an action that refuses non-writers by default, "named"
-// or "open" when its inputs admit others, "none" when nothing checks the actor.
-func identifyStep(st wfStep) (agent, via, gate, detail string, modelKeys []string) {
+// stepAgent is what a step that runs an agent says about it on its own.
+type stepAgent struct {
+	agent, via string
+	// gate is "closed" for an action that refuses non-writers by default,
+	// "named" or "open" when its inputs admit others, "none" when nothing
+	// checks the actor; detail is the input that decided it.
+	gate, detail string
+	modelKeys    []string
+	readOnly     bool
+	actionToken  bool
+}
+
+// identifyStep reports the agent a step runs; ok is false for any other step.
+// An agent CLI in a script is never read-only as far as scopeward can tell.
+func identifyStep(st wfStep) (stepAgent, bool) {
 	if st.Uses != "" {
 		ref := strings.ToLower(st.Uses)
 		if at := strings.Index(ref, "@"); at >= 0 {
@@ -349,23 +380,124 @@ func identifyStep(st wfStep) (agent, via, gate, detail string, modelKeys []strin
 			if ref != a.repo && !strings.HasPrefix(ref, a.repo+"/") {
 				continue
 			}
-			gate = "none"
+			with := stringMap(st.With)
+			sa := stepAgent{agent: a.agent, via: st.Uses, gate: "none", modelKeys: a.modelKeys, actionToken: a.actionToken}
 			if a.gated {
-				gate = "closed"
-				if state, d := a.gate(stringMap(st.With)); state != "" {
-					gate, detail = state, d
+				sa.gate = "closed"
+				if state, d := a.gate(with); state != "" {
+					sa.gate, sa.detail = state, d
 				}
 			}
-			return a.agent, st.Uses, gate, detail, a.modelKeys
+			sa.readOnly = a.readOnly != nil && a.readOnly(with)
+			return sa, true
 		}
-		return "", "", "", "", nil
+		return stepAgent{}, false
 	}
 	for _, c := range agentCLIs {
 		if c.re.MatchString(st.Run) {
-			return c.agent, "run", "none", "", nil
+			return stepAgent{agent: c.agent, via: "run", gate: "none"}, true
 		}
 	}
-	return "", "", "", "", nil
+	return stepAgent{}, false
+}
+
+// geminiReadOnlyTools are the Gemini CLI built-ins that only read the
+// workspace. The web tools are left out on purpose: a fetch is an exfiltration
+// channel. Source: https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/tools.md
+var geminiReadOnlyTools = map[string]bool{
+	"read_file": true, "read_many_files": true, "list_directory": true,
+	"glob": true, "grep_search": true, "search_file_content": true,
+}
+
+// geminiReadOnly reports whether run-gemini-cli's settings input restricts
+// the built-in tools to reading (tools.core, or the older coreTools) and adds
+// no MCP server, whose tools could act.
+func geminiReadOnly(with map[string]string) bool {
+	var settings struct {
+		Tools struct {
+			Core []string `json:"core"`
+		} `json:"tools"`
+		CoreTools  []string       `json:"coreTools"`
+		MCPServers map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(stripJSONC(with["settings"]), &settings); err != nil {
+		return false
+	}
+	core := settings.Tools.Core
+	if core == nil {
+		core = settings.CoreTools
+	}
+	if len(core) == 0 || len(settings.MCPServers) > 0 {
+		return false
+	}
+	for _, tool := range core {
+		name, _, _ := strings.Cut(strings.TrimSpace(tool), "(")
+		if !geminiReadOnlyTools[name] {
+			return false
+		}
+	}
+	return true
+}
+
+// githubTokenEnv are the variables GitHub tooling reads a token from.
+var githubTokenEnv = []string{"GITHUB_TOKEN", "GH_TOKEN"}
+
+// agentCredentials are the credentials in the environment of the agent at step
+// index i: a GitHub token in its env (the step's value wins over the job's and
+// the workflow's, so a blanked one is none), the token the action itself works
+// with, a secret passed to the step, or a token an earlier checkout left in
+// .git/config, which any agent that can read files can read.
+func agentCredentials(d *wfDoc, j wfJob, i int, sa stepAgent) []string {
+	st := j.Steps[i]
+	var creds []string
+	layers := []map[string]string{stringMap(st.Env), stringMap(j.Env), stringMap(d.Env)}
+	for _, key := range githubTokenEnv {
+		for _, layer := range layers {
+			if v, ok := layer[key]; ok {
+				if strings.TrimSpace(v) != "" {
+					creds = append(creds, "env "+key)
+				}
+				break
+			}
+		}
+	}
+	if sa.actionToken {
+		creds = append(creds, "the action's own GitHub token")
+	}
+	stepTexts := append(flatten(st.Env), flatten(st.With)...)
+	for _, name := range without(secretNames(stepTexts), secretNames(modelKeyTexts(st, sa.modelKeys))) {
+		creds = append(creds, "secret "+name)
+	}
+	for _, prev := range j.Steps[:i] {
+		if strings.HasPrefix(strings.ToLower(prev.Uses), "actions/checkout") &&
+			strings.TrimSpace(stringMap(prev.With)["persist-credentials"]) != "false" {
+			creds = append(creds, "checkout credentials persisted in .git/config")
+			break
+		}
+	}
+	return dedupe(creds)
+}
+
+// outputExecuted reports whether a step after the agent's expands the agent's
+// output into a script, which hands the job's reach to whoever steers the agent.
+// Passing it through env: and reading it as data is not execution.
+func outputExecuted(j wfJob, i int) bool {
+	id := j.Steps[i].ID
+	if id == "" {
+		return false
+	}
+	ref := "steps." + id + ".outputs"
+	for _, later := range j.Steps[i+1:] {
+		texts := []string{later.Run, stringMap(later.With)["script"]}
+		for _, t := range texts {
+			for _, m := range exprRe.FindAllStringSubmatch(t, -1) {
+				if strings.Contains(m[1], ref) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func gateRank(g string) int {
@@ -482,6 +614,11 @@ func without(list, drop []string) []string {
 }
 
 func modelSecrets(st wfStep, keyInputs []string) []string {
+	return secretNames(modelKeyTexts(st, keyInputs))
+}
+
+// modelKeyTexts are the values a step hands the model's own credential through.
+func modelKeyTexts(st wfStep, keyInputs []string) []string {
 	var texts []string
 	with := stringMap(st.With)
 	for _, k := range keyInputs {
@@ -492,7 +629,7 @@ func modelSecrets(st wfStep, keyInputs []string) []string {
 			texts = append(texts, v)
 		}
 	}
-	return secretNames(texts)
+	return texts
 }
 
 // interpolated lists the untrusted event fields a step expands into the agent's
