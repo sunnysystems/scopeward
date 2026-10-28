@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>scopeward · {{.OrgLogin}}</title>
 <style>
-  /* Sunny Systems design system v1.0 — inline CSS + one small inline script for
-     the findings filter, fully self-contained. No external assets and no network
-     calls: fonts fall back to system stacks and the Sunny logo is a base64 data
-     URI. The script only filters the DOM; with JS disabled, all findings show. */
+  /* Sunny Systems design system v1.0 — inline CSS + two small inline scripts
+     (the findings filter, the access search), fully self-contained. No external
+     assets and no network calls: fonts fall back to system stacks and the Sunny
+     logo is a base64 data URI. The scripts only filter the DOM; with JS disabled,
+     everything shows. */
   :root{
     --amber:#FFB61F; --yellow:#F0C840; --yellow-light:#F5D660; --dark:#332C15;
     --black:#1A1A1D; --gray-dark:#3A3A3A; --gray-mid:#8F8F8F; --gray-light:#DFDFDF; --white:#FFFFFF;
@@ -220,6 +221,32 @@
     font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   footer .by{margin-left:auto;color:var(--gray-mid)}
   footer b{color:var(--amber);font-weight:500}
+  /* Access: who can reach what, by member and by repository. */
+  .access .acc-scope{color:var(--gray-mid);font-size:12px;margin:0 0 6px}
+  .access .acc-gap{color:var(--amber);font-size:12px;margin:0 0 6px}
+  .access .acc-search{margin:10px 0 4px}
+  .acc-row{background:var(--card);border:.5px solid var(--line);border-radius:var(--radius-md);margin:6px 0}
+  .acc-row > summary{cursor:pointer;list-style:none;padding:9px 14px;display:flex;gap:10px;align-items:baseline}
+  .acc-row > summary::-webkit-details-marker{display:none}
+  .acc-row > summary b{color:var(--white);font-weight:600}
+  .acc-row > summary:hover b{color:var(--amber)}
+  .acc-row:target{border-color:var(--amber)}
+  .acc-tag{font-size:11px;color:var(--amber);border:1px solid rgba(255,182,31,.45);border-radius:var(--radius-sm);padding:0 6px}
+  .acc-sum{margin-left:auto;color:var(--gray-mid);font-size:12px}
+  .acc-body{padding:0 14px 10px}
+  .acc-body .acc-note{color:var(--gray-mid);font-size:12px;margin:4px 0}
+  table.acc{border-collapse:collapse;width:100%;font-size:13px;margin:4px 0}
+  table.acc td{padding:3px 12px 3px 0;vertical-align:top}
+  table.acc td.lvl{font-family:var(--mono);width:80px}
+  table.acc td.subj{font-family:var(--mono);color:var(--yellow-light);white-space:nowrap}
+  table.acc td.path{color:var(--gray-light)}
+  table.acc .why{color:var(--gray-mid)}
+  table.acc tr.ow td{color:var(--gray-mid)}
+  .lvl-admin{color:var(--danger)}
+  .lvl-write{color:var(--amber)}
+  .lvl-read{color:var(--gray-mid)}
+  a.acc-link{margin-left:8px;font-size:11px;color:var(--gray-mid);border:1px solid var(--line);border-radius:var(--radius-sm);padding:0 5px}
+  a.acc-link:hover{color:var(--amber);border-color:var(--amber);text-decoration:none}
 </style>
 </head>
 <body><div class="wrap">
@@ -325,7 +352,7 @@
     {{if .Remediation}}<p class="rem"><b>Fix:</b> {{.Remediation}}</p>{{end}}
     <ul class="affected">
       {{range .Items}}<li data-sev="{{.SeverityClass}}" data-text="{{.Search}}">
-        {{if .ShowChip}}<span class="chip sev-{{.SeverityClass}}">{{.Severity}}</span>{{end}}<span class="rtitle">{{if .ResourceURL}}<a href="{{.ResourceURL}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</span>{{if .AsideName}}<span class="aside">{{.AsideName}}</span>{{end}}
+        {{if .ShowChip}}<span class="chip sev-{{.SeverityClass}}">{{.Severity}}</span>{{end}}<span class="rtitle">{{if .ResourceURL}}<a href="{{.ResourceURL}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</span>{{if .AsideName}}<span class="aside">{{.AsideName}}</span>{{end}}{{if .AccessAnchor}}<a class="acc-link" href="#{{.AccessAnchor}}" title="who can reach this, and why">access</a>{{end}}
         {{if or .Evidence .GHFix}}<details class="ev"><summary>details</summary>
           {{if .GHFix}}<pre class="ghfix" title="scopeward never runs this; review before running">{{.GHFix}}{{if .GHVerify}}
 
@@ -356,6 +383,25 @@
     <tr><td><code>owning-team</code> property</td><td>{{.Property}}</td></tr>
   </table>
   {{if .Gaps}}<p class="td-gaps-h"><b>Gaps</b></p><ul class="td-list">{{range .Gaps}}<li>{{.}}</li>{{end}}</ul>{{end}}
+</div>
+{{end}}
+
+{{with .Access}}
+<h2 class="axis" id="access">Access</h2>
+<div class="access">
+  <p class="acc-scope">Who can reach which repository, and by which path: organization ownership, the base permission, organization roles, team grants through nested teams, and direct grants. {{.Scope}}</p>
+  {{range .Gaps}}<p class="acc-gap">Not assessed: {{.}}</p>{{end}}
+  {{if .TooLarge}}<p class="acc-note">{{.TooLarge}}</p>{{else}}
+  <input id="acc-search" class="sw-search acc-search" type="search" autocomplete="off" placeholder="Find a member, repository or team…">
+  <details class="axissection" open>
+    <summary class="axissum">By member<span class="line"></span><span class="axiscount">{{len .Members}}</span></summary>
+    {{range .Members}}{{template "accrow" .}}{{end}}
+  </details>
+  <details class="axissection">
+    <summary class="axissum">By repository<span class="line"></span><span class="axiscount">{{len .Repos}}{{if .Archived}} · {{.Archived}} archived not listed{{end}}</span></summary>
+    {{range .Repos}}{{template "accrow" .}}{{end}}
+  </details>
+  {{end}}
 </div>
 {{end}}
 
@@ -457,4 +503,38 @@
   apply();
 })();
 </script>
+<script>
+/* Access search and deep links: filter the access rows by member, repository
+   or team, and open the row a finding's "access" link points at. */
+(function () {
+  var rows = [].slice.call(document.querySelectorAll('.acc-row'));
+  var q = document.getElementById('acc-search');
+  if (q) q.addEventListener('input', function () {
+    var t = q.value.trim().toLowerCase();
+    rows.forEach(function (r) {
+      r.style.display = !t || (r.getAttribute('data-text') || '').indexOf(t) !== -1 ? '' : 'none';
+    });
+  });
+  function openTarget() {
+    var id = decodeURIComponent(location.hash.slice(1));
+    var el = id && document.getElementById(id);
+    if (!el || !el.classList.contains('acc-row')) return;
+    for (var p = el; p; p = p.parentElement) { if (p.tagName === 'DETAILS') p.open = true; }
+    el.style.display = '';
+    el.scrollIntoView({block: 'start'});
+  }
+  window.addEventListener('hashchange', openTarget);
+  openTarget();
+})();
+</script>
 </body></html>
+{{define "accrow"}}<details class="acc-row" id="{{.Anchor}}" data-text="{{.Search}}">
+  <summary><b>{{.Name}}</b>{{if .Tag}}<span class="acc-tag">{{.Tag}}</span>{{end}}<span class="acc-sum">{{.Summary}}</span></summary>
+  <div class="acc-body">
+    {{range .Notes}}<p class="acc-note">{{.}}</p>{{end}}
+    <table class="acc">
+    {{range .OrgWide}}<tr class="ow"><td class="lvl {{.LevelClass}}">{{.Level}}</td><td class="subj">{{if .Subject}}{{.Subject}}{{else}}every repository{{end}}</td><td class="path">{{.Path}}</td></tr>{{end}}
+    {{range .Lines}}<tr><td class="lvl {{.LevelClass}}">{{.Level}}</td><td class="subj">{{.Subject}}</td><td class="path">{{.Path}}{{if .Note}} <span class="why">({{.Note}})</span>{{end}}</td></tr>{{end}}
+    </table>
+  </div>
+</details>{{end}}
