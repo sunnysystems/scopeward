@@ -145,9 +145,13 @@ type Repo struct {
 	DeployKeys             []DeployKey      `json:"deploy_keys,omitempty"`
 	Webhooks               []Webhook        `json:"webhooks,omitempty"`
 	BotCommitters          []CommitActivity `json:"bot_committers,omitempty"`
-	SecretScanning         *bool            `json:"secret_scanning,omitempty"`    // nil = unknown
-	PushProtection         *bool            `json:"push_protection,omitempty"`    // nil = unknown
-	OpenSecretAlerts       *int             `json:"open_secret_alerts,omitempty"` // nil = unknown/unavailable
+	// AgentAssistedCommits are commits a human account authored that carry a
+	// coding agent's mark (a co-author trailer, an author-name suffix). Kept
+	// apart from BotCommitters: the agent acted through a person's credential.
+	AgentAssistedCommits []AgentAssist `json:"agent_assisted_commits,omitempty"`
+	SecretScanning       *bool         `json:"secret_scanning,omitempty"`    // nil = unknown
+	PushProtection       *bool         `json:"push_protection,omitempty"`    // nil = unknown
+	OpenSecretAlerts     *int          `json:"open_secret_alerts,omitempty"` // nil = unknown/unavailable
 	// Dependabot vulnerability alerts. Enabled is nil when not assessed (insufficient
 	// visibility); OpenDependabotAlerts is nil when alerts are off/unavailable, distinct
 	// from an all-zero summary.
@@ -268,6 +272,20 @@ type OrgRoleTeamGrant struct {
 type CommitActivity struct {
 	Login   string `json:"login"`   // e.g. "dependabot[bot]"
 	Commits int    `json:"commits"` // commits by this identity in the scanned window
+}
+
+// AgentAssist counts recent commits in a repository that one human author made
+// with a coding agent's mark on them. The mark is self-declared and removable,
+// so these counts are a floor; and git authorship is not authentication, so
+// Author is who the commit names, not the credential that pushed it. Author is
+// empty when the commit email is linked to no account, or when the agent
+// authored the commit under its own address (a cloud session): GitHub then links
+// the commit to whichever account claims that address, which is not a person
+// in the org.
+type AgentAssist struct {
+	Agent   string `json:"agent"`            // e.g. "Claude Code"
+	Author  string `json:"author,omitempty"` // GitHub login; empty when no person can be named (see below)
+	Commits int    `json:"commits"`
 }
 
 // AppInstallation is a GitHub App installed on the organization, with the

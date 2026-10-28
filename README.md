@@ -140,7 +140,7 @@ run. → [token scopes](docs/entitlements.md#recommended-scopes)
 | **Human Identity** | members without 2FA, org-wide 2FA not enforced, accounts outside SSO, SSO emails off the company domain, outside collaborators, owner sprawl, stale invitations, dormant accounts |
 | **Teams & Permissions** | over-permissive base permission, direct admin grants that bypass teams, deep nesting, team sprawl, ghost/orphan/empty/singleton teams, ownership gaps, weak or admin-bypassable branch protection and rulesets, elevated custom roles |
 | **Non-Human Identities** | installed GitHub Apps and what they can change, writable deploy keys, webhooks with no secret or SSL off, non-expiring and over-broad PATs, org secrets visible to every repo, open Actions policy, self-hosted runners, `GITHUB_TOKEN` defaulting to write, Actions that can approve PRs |
-| **AI Agents** | inventory of bot/machine committers, agents committing with over-broad write scope, unidentified bot committers, agents pushing to unprotected branches, idle or non-member Copilot seats |
+| **AI Agents** | inventory of bot/machine committers and of the commits coding agents (Claude Code, Cursor, Aider) co-wrote under people's own accounts, agents committing with over-broad write scope, unidentified bot committers, agents pushing to unprotected branches, idle or non-member Copilot seats |
 | **Code Security** | secret scanning, push protection and Dependabot off by default or per repo, open leaked-secret alerts, open vulnerability alerts |
 | **Supply Chain** | unpinned third-party Actions, internal reusable workflows tracked by branch, `pull_request_target` triggers |
 | **Repository Hygiene** | stale repositories with no pushes past a threshold, and the access that outlived them |
