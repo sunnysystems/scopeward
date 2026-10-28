@@ -189,7 +189,8 @@ func (c agentInventory) Run(_ context.Context, s *model.Snapshot) []model.Findin
 	agents := buildAgents(s)
 	assisted := buildAssisted(s)
 	ci, unassessed := ciAgents(s)
-	if len(agents) == 0 && len(assisted) == 0 && len(ci) == 0 && len(unassessed) == 0 {
+	configured := configuredRepos(s)
+	if len(agents) == 0 && len(assisted) == 0 && len(ci) == 0 && len(unassessed) == 0 && len(configured) == 0 {
 		return nil
 	}
 
@@ -246,11 +247,11 @@ func (c agentInventory) Run(_ context.Context, s *model.Snapshot) []model.Findin
 	case len(agents) == 0 && len(assisted) == 0:
 		// Only CI agents (or only unassessed calls): the title is theirs below.
 	case len(assisted) == 0:
-		title = fmt.Sprintf("%d machine identities committed code in the last 90 days", len(agents))
+		title = machineIdentities(len(agents)) + " committed code in the last 90 days"
 	case len(agents) == 0:
 		title = fmt.Sprintf("%s co-wrote %s in the last 90 days", plural(len(assisted), "coding agent"), plural(assistedCommits(assisted), "commit"))
 	default:
-		title = fmt.Sprintf("%d machine identities and %s committed code in the last 90 days", len(agents), plural(len(assisted), "coding agent"))
+		title = fmt.Sprintf("%s and %s committed code in the last 90 days", machineIdentities(len(agents)), plural(len(assisted), "coding agent"))
 	}
 
 	if len(ci) > 0 || len(unassessed) > 0 {
@@ -285,6 +286,20 @@ func (c agentInventory) Run(_ context.Context, s *model.Snapshot) []model.Findin
 		}
 	}
 
+	if len(configured) > 0 {
+		evidence["configured"] = configured
+		reposCarry := fmt.Sprintf("%d repositories carry", len(configured))
+		if len(configured) == 1 {
+			reposCarry = "1 repository carries"
+		}
+		if title == "" {
+			title = reposCarry + " files that steer AI agents"
+		} else {
+			title += "; " + reposCarry + " agent files"
+		}
+		description = appendSentence(description, reposCarry+" files that steer AI agents (instructions, agent settings or MCP servers), listed under configured: who may change them is who governs what the agents do.")
+	}
+
 	return []model.Finding{{
 		CheckID:     c.Meta().ID,
 		Title:       title,
@@ -317,6 +332,38 @@ func ciAgents(s *model.Snapshot) ([]map[string]any, []string) {
 		}
 	}
 	return jobs, unassessed
+}
+
+// configuredRepos lists, per repository, the committed files that steer AI
+// agents, and the MCP servers they make every developer's agent launch.
+func configuredRepos(s *model.Snapshot) []map[string]any {
+	var out []map[string]any
+	for _, r := range activeRepos(s) {
+		if len(r.AgentControlFiles) == 0 {
+			continue
+		}
+		files := make([]string, 0, len(r.AgentControlFiles))
+		for _, f := range r.AgentControlFiles {
+			files = append(files, f.Path)
+		}
+		entry := map[string]any{"repo": r.Name, "files": files}
+		if len(r.MCPServers) > 0 {
+			servers := make([]string, 0, len(r.MCPServers))
+			for _, srv := range r.MCPServers {
+				servers = append(servers, srv.Name)
+			}
+			entry["mcp_servers"] = servers
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func machineIdentities(n int) string {
+	if n == 1 {
+		return "1 machine identity"
+	}
+	return fmt.Sprintf("%d machine identities", n)
 }
 
 // appendSentence adds sentence b after text a.

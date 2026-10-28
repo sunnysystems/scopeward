@@ -67,6 +67,7 @@ const (
 	DataDependabotEnabled        DataKind = "repos.dependabot_enabled"
 	DataOpenDependabotAlerts     DataKind = "repos.open_dependabot_alerts"
 	DataWorkflows                DataKind = "repos.workflows"
+	DataAgentFiles               DataKind = "repos.agent_files"
 
 	DataAccount DataKind = "account" // authenticated user's own account facts
 
@@ -80,7 +81,7 @@ var PerRepoKinds = []DataKind{
 	DataRepoDirectCollaborators, DataDeployKeys, DataRepoWebhooks,
 	DataCommitAuthors, DataBranchProtection, DataRepoSecurity,
 	DataOpenSecretAlerts, DataDependabotEnabled, DataOpenDependabotAlerts,
-	DataWorkflows, DataCodeowners,
+	DataWorkflows, DataCodeowners, DataAgentFiles,
 }
 
 // CoverageStatus says how completely a DataKind was collected.

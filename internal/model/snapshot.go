@@ -185,6 +185,16 @@ type Repo struct {
 	Properties        map[string]string `json:"properties,omitempty"`
 	CodeownersPresent *bool             `json:"codeowners_present,omitempty"`
 	CodeownersTeams   []string          `json:"codeowners_teams,omitempty"`
+	// CodeownersRules are the CODEOWNERS lines in file order; the last rule that
+	// matches a path decides its owners, and a rule with none leaves it unowned.
+	CodeownersRules []CodeownersRule `json:"codeowners_rules,omitempty"`
+	// Files that steer AI agents, found at the root of the default branch and in
+	// the agents' config directories. AgentFilesAssessed is nil when that listing
+	// was not read, so no file found never reads as no file there.
+	AgentFilesAssessed *bool              `json:"agent_files_assessed,omitempty"`
+	AgentControlFiles  []AgentControlFile `json:"agent_control_files,omitempty"`
+	MCPServers         []MCPServer        `json:"mcp_servers,omitempty"`
+	AgentSettings      []AgentSettings    `json:"agent_settings,omitempty"`
 	// JobTokenInboundEnabled reports whether this project enforces the
 	// CI_JOB_TOKEN inbound allowlist (GitLab): true = only allowlisted projects'
 	// job tokens may access it; false = any project's token can. nil = unknown.
@@ -192,9 +202,12 @@ type Repo struct {
 	// GitLab merge-request approval settings (Premium). nil = not collected (Free
 	// tier or insufficient access), so the approval check reports "not evaluated".
 	// MRApprovalsRequired feeds the neutral BranchReqPRReview (>=1 → review required).
-	MRApprovalsRequired       *int  `json:"mr_approvals_required,omitempty"`
-	MRAuthorCanApprove        *bool `json:"mr_author_can_approve,omitempty"`      // true = author may approve own MR
-	MRResetApprovalsOnPush    *bool `json:"mr_reset_approvals_on_push,omitempty"` // false = stale approvals survive a new push
+	MRApprovalsRequired    *int  `json:"mr_approvals_required,omitempty"`
+	MRAuthorCanApprove     *bool `json:"mr_author_can_approve,omitempty"`      // true = author may approve own MR
+	MRResetApprovalsOnPush *bool `json:"mr_reset_approvals_on_push,omitempty"` // false = stale approvals survive a new push
+	// CodeOwnerApprovalRequired reports whether the default branch requires a code
+	// owner's review (GitLab code-owner approval; GitHub's classic protection or
+	// ruleset pull_request rule). false makes every CODEOWNERS rule advisory.
 	CodeOwnerApprovalRequired *bool `json:"code_owner_approval_required,omitempty"`
 }
 
@@ -258,6 +271,47 @@ type AgentWorkflow struct {
 	// Interpolated are untrusted event fields expanded straight into the
 	// agent's inputs or script, e.g. "github.event.issue.body".
 	Interpolated []string `json:"interpolated,omitempty"`
+}
+
+// CodeownersRule is one CODEOWNERS line: a gitignore-style pattern and the
+// owners it names, none meaning the path is deliberately left unowned.
+type CodeownersRule struct {
+	Pattern string   `json:"pattern"`
+	Owners  []string `json:"owners,omitempty"`
+}
+
+// AgentControlFile is a committed file that tells an AI agent what to do or
+// what it may do. Kind is "instructions" (AGENTS.md, CLAUDE.md, Copilot and
+// Cursor rules), "settings" (agent permissions and hooks) or "mcp" (servers
+// every developer's agent launches).
+type AgentControlFile struct {
+	Path string `json:"path"`
+	Kind string `json:"kind"`
+}
+
+// MCPServer is one server a committed MCP config makes every developer's agent
+// run. Unpinned says why the code it launches can change under the repository
+// (a package without an exact version, an image by tag); empty when pinned,
+// remote, or local to the repository. FirstParty marks the org's own package
+// or image, which sits inside its own trust boundary.
+type MCPServer struct {
+	File       string `json:"file"`
+	Name       string `json:"name"`
+	Launch     string `json:"launch,omitempty"` // the command line, or the URL of a remote server
+	Package    string `json:"package,omitempty"`
+	Remote     bool   `json:"remote,omitempty"`
+	Unpinned   string `json:"unpinned,omitempty"`
+	FirstParty bool   `json:"first_party,omitempty"`
+}
+
+// AgentSettings is a committed agent settings file and what it pre-approves
+// for everyone who works in the repository.
+type AgentSettings struct {
+	File string `json:"file"`
+	// BroadAllow are allow rules that approve a whole execution tool, e.g. "Bash"
+	// or "Bash(*)": any shell command, without a prompt.
+	BroadAllow  []string `json:"broad_allow,omitempty"`
+	DefaultMode string   `json:"default_mode,omitempty"`
 }
 
 // Ruleset is an organization repository ruleset (the /settings/rules page):
