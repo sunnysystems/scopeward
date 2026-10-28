@@ -5,7 +5,7 @@ Governance is not a thing you check once. The action installs a pinned release
 uploads the report.
 
 ```yaml
-- uses: sunnysystems/scopeward@v0.1.0
+- uses: sunnysystems/scopeward@v0.2.0
   env:
     GITHUB_TOKEN: ${{ secrets.SCOPEWARD_TOKEN }}   # env only — never an input
   with:
@@ -56,7 +56,7 @@ jobs:
           [ -n "$prev" ] && gh run download "$prev" --name scopeward-report --dir baseline || \
             echo "no previous report; this run establishes the baseline"
 
-      - uses: sunnysystems/scopeward@v0.1.0
+      - uses: sunnysystems/scopeward@v0.2.0
         env:
           GITHUB_TOKEN: ${{ secrets.SCOPEWARD_TOKEN }}
         with:
