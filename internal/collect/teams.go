@@ -171,6 +171,9 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 			r.DirectCollaborators = g
 			grants.add(len(g))
 		}
+		if opts.AccessOnly {
+			return
+		}
 
 		if k, err := fetchDeployKeys(ctx, client, org, r.Name); err != nil {
 			keys.fail(reasonFor(err, "listing deploy keys"))
@@ -284,9 +287,18 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 	// an archived repo is precisely where nobody is looking. Scan those for that
 	// one signal, so the recommendation to archive dead repos never quietly
 	// retires the class of finding that outlives archiving.
+	grants.record(snap.Coverage, model.DataRepoDirectCollaborators, attempted)
+	if opts.AccessOnly {
+		for _, k := range perRepoKinds {
+			if k != model.DataRepoDirectCollaborators {
+				snap.Coverage.Missing(k, "not collected by `scopeward access`")
+			}
+		}
+		return
+	}
+
 	archived := collectArchivedSecrets(ctx, client, org, snap, prog, opts, &security, &alerts)
 
-	grants.record(snap.Coverage, model.DataRepoDirectCollaborators, attempted)
 	keys.record(snap.Coverage, model.DataDeployKeys, attempted)
 	hooks.record(snap.Coverage, model.DataRepoWebhooks, attempted)
 	commits.record(snap.Coverage, model.DataCommitAuthors, attempted)
