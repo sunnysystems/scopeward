@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/sunnysystems/scopeward/internal/access"
 	"github.com/sunnysystems/scopeward/internal/check"
 	_ "github.com/sunnysystems/scopeward/internal/check/checks" // ensure check titles are registered
 	"github.com/sunnysystems/scopeward/internal/model"
@@ -56,6 +57,13 @@ type appModel struct {
 	groups   []groupData
 	expanded map[string]bool
 
+	// The Access tab: the resolved access graph, walked by member or by repository.
+	tab          tab
+	graph        *access.Graph
+	accessList   list.Model
+	pivot        pivot
+	showArchived bool
+
 	width, height int
 	vpReady       bool
 }
@@ -98,8 +106,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
-		// While the list's filter is active, let it consume keystrokes.
-		filtering := m.state == stateReady && m.list.FilterState() == list.Filtering
+		// While the active list's filter is active, let it consume keystrokes.
+		filtering := m.state == stateReady && m.activeList().FilterState() == list.Filtering
 		if !filtering {
 			switch msg.String() {
 			case "q", "esc":
@@ -107,13 +115,39 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if m.state == stateReady && !filtering {
-			switch msg.String() {
-			case "enter", " ", "right", "l":
-				m.toggleSelected(true)
+			if msg.String() == "tab" {
+				m.tab = 1 - m.tab
+				m.syncDetail()
 				return m, nil
-			case "left", "h":
-				m.toggleSelected(false)
-				return m, nil
+			}
+			if m.tab == tabFindings {
+				switch msg.String() {
+				case "enter", " ", "right", "l":
+					m.toggleSelected(true)
+					return m, nil
+				case "left", "h":
+					m.toggleSelected(false)
+					return m, nil
+				case "a":
+					// The "why" behind a finding is one keypress away.
+					if f, ok := m.selectedFinding(); ok && m.openAccessFor(f.Resource) {
+						m.syncDetail()
+					}
+					return m, nil
+				}
+			} else {
+				switch msg.String() {
+				case "p":
+					m.pivot = 1 - m.pivot
+					m.refreshAccessList()
+					m.syncDetail()
+					return m, nil
+				case "x":
+					m.showArchived = !m.showArchived
+					m.refreshAccessList()
+					m.syncDetail()
+					return m, nil
+				}
 			}
 		}
 
@@ -138,7 +172,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.state == stateReady {
 		var cmd tea.Cmd
-		m.list, cmd = m.list.Update(msg)
+		if m.tab == tabAccess {
+			m.accessList, cmd = m.accessList.Update(msg)
+		} else {
+			m.list, cmd = m.list.Update(msg)
+		}
 		m.syncDetail()
 		return m, cmd
 	}
@@ -154,6 +192,14 @@ func (m *appModel) initReady() {
 	m.list.Title = fmt.Sprintf("Problems (%d)", len(m.groups))
 	m.list.SetShowStatusBar(false)
 	m.list.Styles.Title = lipgloss.NewStyle().Foreground(ui.Copper).Bold(true)
+
+	if m.result.Snapshot != nil {
+		m.graph = access.Build(m.result.Snapshot)
+	}
+	m.accessList = list.New(nil, list.NewDefaultDelegate(), 0, 0)
+	m.accessList.SetShowStatusBar(false)
+	m.accessList.Styles.Title = lipgloss.NewStyle().Foreground(ui.Copper).Bold(true)
+	m.refreshAccessList()
 
 	m.viewport = viewport.New(0, 0)
 	m.vpReady = true
@@ -248,6 +294,14 @@ func (m *appModel) indexOfGroup(checkID string) int {
 	return 0
 }
 
+// activeList is the list the current tab shows.
+func (m *appModel) activeList() *list.Model {
+	if m.tab == tabAccess {
+		return &m.accessList
+	}
+	return &m.list
+}
+
 // layout sizes the list and viewport to the current terminal dimensions.
 func (m *appModel) layout() {
 	if m.state != stateReady || !m.vpReady {
@@ -258,6 +312,7 @@ func (m *appModel) layout() {
 		bodyHeight = 3
 	}
 	m.list.SetSize(listWidth, bodyHeight)
+	m.accessList.SetSize(listWidth, bodyHeight)
 
 	vpWidth := m.width - listWidth - 3
 	if vpWidth < 20 {
@@ -272,6 +327,12 @@ func (m *appModel) layout() {
 // for a group, or the full finding for a leaf).
 func (m *appModel) syncDetail() {
 	if !m.vpReady {
+		return
+	}
+	if m.tab == tabAccess {
+		// Wrap rather than let the viewport cut long paths and notes off.
+		m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(m.accessDetail()))
+		m.viewport.GotoTop()
 		return
 	}
 	switch v := m.list.SelectedItem().(type) {

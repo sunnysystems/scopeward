@@ -120,7 +120,7 @@ scopeward --org my-org                      # audit an organization
 scopeward --org my-org --repo api           # audit a single repository (repeatable; globs ok)
 scopeward --me                              # audit your own account & repos (incl. private)
 scopeward --user some-login                 # audit any user's public account
-scopeward tui --org my-org                  # browse findings in an interactive TUI
+scopeward tui --org my-org                  # browse findings, and who can reach what (tab), in a TUI
 scopeward access --org my-org member alice  # every repo alice can reach, and through which team or grant
 scopeward access --org my-org repo api      # everyone who can reach api, and why
 

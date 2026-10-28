@@ -71,7 +71,10 @@ func severityStyle(s model.Severity) lipgloss.Style {
 // readyView composes the header, the list+detail body, and the footer.
 func (m appModel) readyView() string {
 	header := m.headerView()
-	footer := ui.Subtle.Render("  ↑/↓ navigate · ↵/→ expand · ← collapse · / filter · q quit")
+	footer := ui.Subtle.Render("  ↑/↓ navigate · ↵/→ expand · ← collapse · a access · / filter · tab access · q quit")
+	if m.tab == tabAccess {
+		footer = ui.Subtle.Render("  ↑/↓ navigate · p members/repositories · x archived · / filter · tab findings · q quit")
+	}
 
 	detail := lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
@@ -80,7 +83,7 @@ func (m appModel) readyView() string {
 		PaddingLeft(2).
 		Render(m.viewport.View())
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, m.list.View(), detail)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, m.activeList().View(), detail)
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 
@@ -102,7 +105,11 @@ func (m appModel) headerView() string {
 		ui.Label.Render("score"),
 		gradeStyle.Render(fmt.Sprintf("%d/100 (%s)", sc.Value, sc.Grade)),
 	)
-	return title + "    " + scoreLine + "\n"
+	tabs := ui.Title.Render("Findings") + ui.Subtle.Render("  Access")
+	if m.tab == tabAccess {
+		tabs = ui.Subtle.Render("Findings  ") + ui.Title.Render("Access")
+	}
+	return title + "    " + scoreLine + "    " + tabs + "\n"
 }
 
 // detailView renders the full detail of one finding, wrapped to width.
