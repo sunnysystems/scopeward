@@ -84,6 +84,76 @@ func buildAgents(s *model.Snapshot) []agent {
 	return out
 }
 
+// assistedAgent is a coding agent that acted through human accounts: commits
+// those people authored carry its mark.
+type assistedAgent struct {
+	Agent        string
+	Commits      int
+	Repos        int
+	Authors      []string // GitHub logins, sorted
+	Unattributed int      // commits that name no person (see model.AgentAssist)
+	// UnprotectedRepos are the repos, sorted, where this agent's code reached a
+	// default branch with no protection.
+	UnprotectedRepos []string
+}
+
+// buildAssisted aggregates agent-assisted commits across repos, per agent.
+func buildAssisted(s *model.Snapshot) []assistedAgent {
+	agg := map[string]*assistedAgent{}
+	authors := map[string]map[string]bool{}
+	for _, r := range activeRepos(s) {
+		inRepo := map[string]bool{}
+		unprotected := r.DefaultBranchProtected != nil && !*r.DefaultBranchProtected
+		for _, aa := range r.AgentAssistedCommits {
+			a := agg[aa.Agent]
+			if a == nil {
+				a = &assistedAgent{Agent: aa.Agent}
+				agg[aa.Agent] = a
+				authors[aa.Agent] = map[string]bool{}
+			}
+			a.Commits += aa.Commits
+			if !inRepo[aa.Agent] {
+				inRepo[aa.Agent] = true
+				a.Repos++
+				if unprotected {
+					a.UnprotectedRepos = append(a.UnprotectedRepos, r.Name)
+				}
+			}
+			if aa.Author == "" {
+				a.Unattributed += aa.Commits
+			} else {
+				authors[aa.Agent][aa.Author] = true
+			}
+		}
+	}
+
+	out := make([]assistedAgent, 0, len(agg))
+	for name, a := range agg {
+		for login := range authors[name] {
+			a.Authors = append(a.Authors, login)
+		}
+		sort.Strings(a.Authors)
+		sort.Strings(a.UnprotectedRepos)
+		out = append(out, *a)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Agent < out[j].Agent })
+	return out
+}
+
+// assistedAgentNames lists the agents whose mark is on a repo's recent commits.
+func assistedAgentNames(r model.Repo) []string {
+	seen := map[string]bool{}
+	var names []string
+	for _, aa := range r.AgentAssistedCommits {
+		if !seen[aa.Agent] {
+			seen[aa.Agent] = true
+			names = append(names, aa.Agent)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
 func appBreadth(app model.AppInstallation) string {
 	_, hasAdmin, hasWrite := elevatedPermissions(app.Permissions)
 	switch {
@@ -111,33 +181,103 @@ func (agentInventory) Meta() check.CheckMeta {
 		DefaultSeverity: model.SevInfo,
 		Kind:            model.KindDebt,
 		RequiresData:    []model.DataKind{model.DataCommitAuthors},
-		Description:     "Inventory of bot/agent identities that have recently committed code.",
+		Description:     "Inventory of bot/agent identities that have recently committed code, and of coding agents whose mark is on commits people authored.",
 	}
 }
 
 func (c agentInventory) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	agents := buildAgents(s)
-	if len(agents) == 0 {
+	assisted := buildAssisted(s)
+	if len(agents) == 0 && len(assisted) == 0 {
 		return nil
 	}
-	summary := make([]map[string]any, 0, len(agents))
-	for _, a := range agents {
-		summary = append(summary, map[string]any{
-			"login": a.Login, "commits": a.Commits, "repos": a.Repos,
-			"app_backed": a.AppBacked, "known_platform": a.KnownPlatform, "write_breadth": a.Breadth,
-		})
+
+	evidence := map[string]any{}
+	var title string
+	description := ""
+	if len(agents) > 0 {
+		summary := make([]map[string]any, 0, len(agents))
+		for _, a := range agents {
+			summary = append(summary, map[string]any{
+				"login": a.Login, "commits": a.Commits, "repos": a.Repos,
+				"app_backed": a.AppBacked, "known_platform": a.KnownPlatform, "write_breadth": a.Breadth,
+			})
+		}
+		evidence["agents"] = summary
+		description = "These non-human identities push code to your repositories. Treat each as an actor whose credential, scope, and necessity should be governed like a human's, especially as AI coding agents proliferate."
 	}
+	if len(assisted) > 0 {
+		summary := make([]map[string]any, 0, len(assisted))
+		for _, a := range assisted {
+			summary = append(summary, map[string]any{
+				"agent": a.Agent, "commits": a.Commits, "repos": a.Repos,
+				"authors": a.Authors, "unattributed_commits": a.Unattributed,
+				"unprotected_repos": a.UnprotectedRepos,
+			})
+		}
+		evidence["assisted"] = summary
+		if description != "" {
+			description += " Coding agents also"
+		} else {
+			description = "Coding agents"
+		}
+		description += " wrote code that people committed under their own accounts, so it reached your repositories with those people's credentials. " +
+			"Each is identified by the mark it leaves on a commit (a co-author trailer, an author-name suffix); a developer can remove it and some agents leave none, so these counts are a floor, not a census. " +
+			"The account named is the commit's author, which is not necessarily the credential that pushed it."
+		if n := len(unprotectedAssistedRepos(assisted)); n > 0 {
+			where := "1 repository"
+			if n != 1 {
+				where = fmt.Sprintf("%d repositories", n)
+			}
+			description += " In " + where + " the default branch has no protection, so that code reached it with no review in the path (see teams.unprotected-default-branch)."
+		}
+	}
+
+	remediation := "Review the list: confirm each agent is expected, tie it to an owner, and ensure its write scope matches its job."
+	if len(assisted) > 0 {
+		remediation += " A coding agent acting through a person's account holds that person's access, so its gate is review on the default branch, not a narrower credential."
+	}
+
+	switch {
+	case len(assisted) == 0:
+		title = fmt.Sprintf("%d machine identities committed code in the last 90 days", len(agents))
+	case len(agents) == 0:
+		title = fmt.Sprintf("%s co-wrote %s in the last 90 days", plural(len(assisted), "coding agent"), plural(assistedCommits(assisted), "commit"))
+	default:
+		title = fmt.Sprintf("%d machine identities and %s committed code in the last 90 days", len(agents), plural(len(assisted), "coding agent"))
+	}
+
 	return []model.Finding{{
 		CheckID:     c.Meta().ID,
-		Title:       fmt.Sprintf("%d machine identities committed code in the last 90 days", len(agents)),
+		Title:       title,
 		Severity:    model.SevInfo,
 		Axis:        model.AxisAIAgents,
 		Resource:    orgRef(s.Org),
-		Evidence:    map[string]any{"agents": summary},
-		Description: "These non-human identities push code to your repositories. Treat each as an actor whose credential, scope, and necessity should be governed like a human's, especially as AI coding agents proliferate.",
-		Remediation: "Review the list: confirm each agent is expected, tie it to an owner, and ensure its write scope matches its job.",
+		Evidence:    evidence,
+		Description: description,
+		Remediation: remediation,
 		DocsURL:     "https://docs.github.com/apps/overview",
 	}}
+}
+
+// unprotectedAssistedRepos is the union of the repos where any agent's code
+// reached an unprotected default branch.
+func unprotectedAssistedRepos(as []assistedAgent) map[string]bool {
+	repos := map[string]bool{}
+	for _, a := range as {
+		for _, r := range a.UnprotectedRepos {
+			repos[r] = true
+		}
+	}
+	return repos
+}
+
+func assistedCommits(as []assistedAgent) int {
+	n := 0
+	for _, a := range as {
+		n += a.Commits
+	}
+	return n
 }
 
 // unidentifiedCommitter flags bot identities committing code that map to neither

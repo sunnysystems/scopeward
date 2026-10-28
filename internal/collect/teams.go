@@ -186,11 +186,12 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 			hooks.add(len(w))
 		}
 
-		if bc, err := fetchRecentBotCommitters(ctx, client, org, r.Name, now); err != nil {
+		if bc, aa, err := fetchRecentCommitActivity(ctx, client, org, r.Name, now); err != nil {
 			commits.fail(reasonFor(err, "scanning commit authors"))
 		} else {
 			r.BotCommitters = bc
-			commits.add(len(bc))
+			r.AgentAssistedCommits = aa
+			commits.add(len(bc) + len(aa))
 		}
 
 		if p, err := fetchDefaultBranchProtected(ctx, client, org, r.Name, r.DefaultBranch); err != nil {

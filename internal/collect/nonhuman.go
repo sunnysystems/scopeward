@@ -263,39 +263,21 @@ func fetchPendingInvitations(ctx context.Context, client *ghclient.Client, org s
 // botCommitWindow bounds how far back commit history is scanned per repo.
 const botCommitWindow = 90 * 24 * time.Hour
 
-// fetchRecentBotCommitters scans recent commits on the default branch and
-// returns the bot/machine identities among the authors, with commit counts. An
-// empty repository (409) yields no committers rather than an error.
-func fetchRecentBotCommitters(ctx context.Context, client *ghclient.Client, org, repo string, now time.Time) ([]model.CommitActivity, error) {
-	type commitDTO struct {
-		Author *struct {
-			Login string `json:"login"`
-			Type  string `json:"type"`
-		} `json:"author"`
-	}
+// fetchRecentCommitActivity scans recent commits on the default branch and
+// returns the bot/machine identities among the authors, and the commits human
+// authors made with a coding agent's mark, both with commit counts. An empty
+// repository (409) yields neither rather than an error.
+func fetchRecentCommitActivity(ctx context.Context, client *ghclient.Client, org, repo string, now time.Time) ([]model.CommitActivity, []model.AgentAssist, error) {
 	q := url.Values{"since": {now.Add(-botCommitWindow).Format(time.RFC3339)}}
 	dtos, err := ghclient.GetAll[commitDTO](ctx, client, "/repos/"+org+"/"+repo+"/commits", q)
 	if err != nil {
 		if ghclient.StatusCode(err) == 409 {
-			return nil, nil // empty repository
+			return nil, nil, nil // empty repository
 		}
-		return nil, err
+		return nil, nil, err
 	}
-
-	counts := map[string]int{}
-	for _, c := range dtos {
-		if c.Author == nil {
-			continue // unlinked author (no GitHub account attached)
-		}
-		if isBotLogin(c.Author.Login, c.Author.Type) {
-			counts[c.Author.Login]++
-		}
-	}
-	out := make([]model.CommitActivity, 0, len(counts))
-	for login, n := range counts {
-		out = append(out, model.CommitActivity{Login: login, Commits: n})
-	}
-	return out, nil
+	bots, assists := tallyCommits(dtos)
+	return bots, assists, nil
 }
 
 // isBotLogin recognizes machine identities by GitHub account type or the
