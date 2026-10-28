@@ -193,3 +193,38 @@ func TestOpenAccessFromFinding(t *testing.T) {
 		t.Errorf("a on bob's finding selected %+v", m.accessList.SelectedItem())
 	}
 }
+
+// p cycles members → repositories → teams → members.
+func TestAccessTab_TeamPivot(t *testing.T) {
+	m := press(readyAccessModel(t), "tab")
+	m = press(press(m, "p"), "p")
+	if m.pivot != pivotTeams {
+		t.Fatalf("pivot = %v after two presses, want teams", m.pivot)
+	}
+	view := m.View()
+	for _, want := range []string{"Teams (1)", "team platform", "Members 2", "alice, bob", "api"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("team pivot missing %q:\n%s", want, view)
+		}
+	}
+	if m = press(m, "p"); m.pivot != pivotMembers {
+		t.Errorf("third press should cycle back to members, got %v", m.pivot)
+	}
+}
+
+// A finding about a team opens that team, matched by the slug in its URL.
+func TestOpenAccessFromTeamFinding(t *testing.T) {
+	m := newTestModel()
+	a := accessAudit()
+	a.Report.Findings = []model.Finding{{
+		CheckID: "teams.singleton", Title: "Platform Eng has one member", Severity: model.SevLow, Axis: model.AxisTeams,
+		Resource: model.ResourceRef{Type: "team", Name: "Platform Eng", URL: "https://github.com/orgs/acme/teams/platform"},
+	}}
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	next, _ = next.Update(collectedMsg{audit: a})
+	m = press(next.(appModel), "a")
+	ti, ok := m.accessList.SelectedItem().(teamItem)
+	if m.tab != tabAccess || m.pivot != pivotTeams || !ok || ti.v.Team != "platform" {
+		t.Errorf("a on a team finding: tab %v pivot %v selected %+v", m.tab, m.pivot, m.accessList.SelectedItem())
+	}
+}

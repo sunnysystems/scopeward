@@ -21,12 +21,15 @@ const (
 	tabAccess
 )
 
-// pivot is which side of the access graph the list walks.
+// pivot is which side of the access graph the list walks; p cycles through
+// them in this order.
 type pivot int
 
 const (
 	pivotMembers pivot = iota
 	pivotRepos
+	pivotTeams
+	pivotCount
 )
 
 // memberItem is a person in the Access tab's member list.
@@ -73,6 +76,24 @@ func (i repoItem) Description() string {
 
 func (i repoItem) FilterValue() string { return i.v.Repo }
 
+// teamItem is a team in the Access tab's team list.
+type teamItem struct{ v access.TeamView }
+
+func (i teamItem) Title() string {
+	title := ui.Accent.Render(i.v.Team)
+	if len(i.v.Ancestors) > 0 {
+		title += ui.Subtle.Render("  in " + strings.Join(i.v.Ancestors, " → "))
+	}
+	return title
+}
+
+func (i teamItem) Description() string {
+	return fmt.Sprintf("   %d members · %d repositories", len(i.v.Members), len(i.v.Repos))
+}
+
+// FilterValue matches by slug and by display name, the one findings carry.
+func (i teamItem) FilterValue() string { return i.v.Team + " " + i.v.Name }
+
 // accessItems lists members or repositories, depending on the pivot.
 func (m *appModel) accessItems() []list.Item {
 	if m.graph == nil {
@@ -80,6 +101,13 @@ func (m *appModel) accessItems() []list.Item {
 	}
 	opts := access.Options{IncludeArchived: m.showArchived}
 	var items []list.Item
+	if m.pivot == pivotTeams {
+		for _, slug := range m.graph.Teams() {
+			v, _ := m.graph.ForTeam(slug, opts)
+			items = append(items, teamItem{v: v})
+		}
+		return items
+	}
 	if m.pivot == pivotMembers {
 		for _, login := range m.graph.Members() {
 			v, _ := m.graph.ForMember(login, opts)
@@ -112,11 +140,7 @@ func (m *appModel) refreshAccessList() {
 	m.accessList.ResetFilter()
 	items := m.accessItems()
 	m.accessList.SetItems(items)
-	if m.pivot == pivotMembers {
-		m.accessList.Title = fmt.Sprintf("Members (%d)", len(items))
-	} else {
-		m.accessList.Title = fmt.Sprintf("Repositories (%d)", len(items))
-	}
+	m.accessList.Title = fmt.Sprintf("%s (%d)", pivotTitle[m.pivot], len(items))
 	m.accessList.Select(0)
 }
 
@@ -131,12 +155,11 @@ func (m *appModel) accessDetail() string {
 	case repoItem:
 		b.WriteString(ui.Title.Render(m.result.Snapshot.Org.Login+"/"+v.v.Repo) + "\n\n")
 		accessview.Repo(&b, v.v, m.graph.Gaps())
+	case teamItem:
+		b.WriteString(ui.Title.Render("team "+v.v.Team) + "\n\n")
+		accessview.Team(&b, v.v, m.graph.Gaps(), accessview.MemberOptions{IncludeArchived: m.showArchived, ArchivedHint: "press x"})
 	default:
-		what := "members"
-		if m.pivot == pivotRepos {
-			what = "repositories"
-		}
-		b.WriteString(ui.Subtle.Render("Nothing to show: no " + what + " were collected."))
+		b.WriteString(ui.Subtle.Render("Nothing to show: no " + strings.ToLower(pivotTitle[m.pivot]) + " were collected."))
 	}
 	return b.String()
 }
@@ -165,12 +188,29 @@ func (m *appModel) openAccessFor(res model.ResourceRef) bool {
 			return false
 		}
 		m.pivot, want = pivotMembers, res.Name
+	case "team":
+		// Team findings name the team for people; the slug ends its URL.
+		slug := ""
+		if i := strings.LastIndex(res.URL, "/teams/"); i >= 0 {
+			slug = res.URL[i+len("/teams/"):]
+		}
+		for _, s := range m.graph.Teams() {
+			if t, _ := m.graph.ForTeam(s, access.Options{}); s == slug || t.Name == res.Name {
+				slug = s
+				break
+			}
+		}
+		if _, ok := m.graph.ForTeam(slug, access.Options{}); !ok {
+			return false
+		}
+		m.pivot = pivotTeams
+		want = slug
 	default:
 		return false
 	}
 	m.refreshAccessList()
 	for i, it := range m.accessList.Items() {
-		if it.FilterValue() == want {
+		if it.FilterValue() == want || strings.HasPrefix(it.FilterValue(), want+" ") {
 			m.accessList.Select(i)
 			break
 		}
@@ -178,6 +218,8 @@ func (m *appModel) openAccessFor(res model.ResourceRef) bool {
 	m.tab = tabAccess
 	return true
 }
+
+var pivotTitle = map[pivot]string{pivotMembers: "Members", pivotRepos: "Repositories", pivotTeams: "Teams"}
 
 // selectedFinding is the finding under the cursor in the findings list: a
 // leaf, or a group with exactly one finding in it.

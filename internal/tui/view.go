@@ -73,7 +73,7 @@ func (m appModel) readyView() string {
 	header := m.headerView()
 	footer := ui.Subtle.Render("  ↑/↓ navigate · ↵/→ expand · ← collapse · a access · / filter · tab access · q quit")
 	if m.tab == tabAccess {
-		footer = ui.Subtle.Render("  ↑/↓ navigate · p members/repositories · x archived · / filter · tab findings · q quit")
+		footer = ui.Subtle.Render("  ↑/↓ navigate · p members/repositories/teams · x archived · / filter · tab findings · q quit")
 	}
 
 	detail := lipgloss.NewStyle().

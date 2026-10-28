@@ -138,7 +138,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				switch msg.String() {
 				case "p":
-					m.pivot = 1 - m.pivot
+					m.pivot = (m.pivot + 1) % pivotCount
 					m.refreshAccessList()
 					m.syncDetail()
 					return m, nil
