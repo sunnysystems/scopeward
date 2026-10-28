@@ -39,6 +39,12 @@ type Options struct {
 	Quick    bool     // skip the per-repo pass entirely (org-level checks only)
 	MaxRepos int      // cap how many repos the per-repo pass scans (0 = no cap)
 	Repos    []string // audit only repos matching one of these globs (empty = all)
+	// AccessOnly collects what the access view needs and nothing else: members
+	// and their roles, teams with their members and grants, organization roles,
+	// repositories and their direct collaborators. One request per repository
+	// instead of the audit's dozen-plus; every other per-repo kind is recorded
+	// as not collected, so nothing reads its absence as a clean result.
+	AccessOnly bool
 }
 
 // perRepoKinds are the DataKinds produced only by the per-repo pass; used to mark
@@ -70,7 +76,7 @@ func Run(ctx context.Context, client *ghclient.Client, org string, prog Reporter
 	// so they collect concurrently.
 	prog.Stage("collecting members, teams & repositories")
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		collectHumanIdentity(ctx, client, org, snap, adminVisible)
@@ -79,10 +85,13 @@ func Run(ctx context.Context, client *ghclient.Client, org string, prog Reporter
 		defer wg.Done()
 		collectTeamsAndPermissions(ctx, client, org, snap, prog, opts)
 	}()
-	go func() {
-		defer wg.Done()
-		collectNonHuman(ctx, client, org, snap)
-	}()
+	if !opts.AccessOnly {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			collectNonHuman(ctx, client, org, snap)
+		}()
+	}
 	wg.Wait()
 
 	// A --repo filter that selects nothing is a typo (or the wrong org): fail
@@ -95,7 +104,7 @@ func Run(ctx context.Context, client *ghclient.Client, org string, prog Reporter
 	// state the pass above just collected. --quick skips the per-repo pass, so
 	// there is no evidence to read and no check that would consume the answer —
 	// probing there would spend a request to inform nobody.
-	if !opts.Quick {
+	if !opts.Quick && !opts.AccessOnly {
 		prog.Stage("checking entitlements")
 		detectSecretProtection(ctx, client, org, snap)
 	}

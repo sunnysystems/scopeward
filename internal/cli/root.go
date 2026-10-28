@@ -127,6 +127,7 @@ func Execute() int {
 	root.PersistentFlags().StringVar(&opts.fixScript, "fix-script", "", "write suggested gh fix commands (commented, never run) to this .sh path")
 
 	root.AddCommand(newTUICommand(opts))
+	root.AddCommand(newAccessCommand(opts))
 
 	root.SetVersionTemplate("scopeward {{.Version}}\n")
 
@@ -135,6 +136,43 @@ func Execute() int {
 		return 1
 	}
 	return opts.exitCode
+}
+
+// openCache wires the on-disk ETag cache when --cache or --refresh ask for it,
+// and returns the function that saves it (a no-op otherwise). A cache that
+// cannot be opened disables itself with a note rather than failing the run.
+func openCache(opts *options, coll provider.Collector, subject string, tok auth.Secret) func() {
+	if !opts.cache && !opts.refresh {
+		return func() {}
+	}
+	dc, err := cache.Open(subject + "-" + tokenFingerprint(tok))
+	if err != nil {
+		if !opts.quiet {
+			fmt.Fprintln(os.Stderr, ui.Subtle.Render("cache disabled: "+err.Error()))
+		}
+		return func() {}
+	}
+	if opts.refresh {
+		dc.Clear() // fetch everything fresh this run, then rewrite the cache
+	}
+	coll.SetCache(dc)
+	return func() { _ = dc.Save() }
+}
+
+// newProgress builds the stderr progress reporter, wired to the collector's
+// rate-limit status. --quiet routes it to nowhere rather than special-casing
+// every call site: the spinner is the loudest thing on stderr.
+func newProgress(opts *options, coll provider.Collector, kind model.Provider) *progress.Spinner {
+	progOut, progTTY := io.Writer(os.Stderr), term.IsStderrTTY()
+	if opts.quiet {
+		progOut, progTTY = io.Discard, false
+	}
+	prog := progress.New(progOut, progTTY)
+	prog.SetRateFunc(coll.RateStatus)
+	coll.SetOnWait(func(d time.Duration) {
+		prog.Notice(fmt.Sprintf("%s rate limit reached; pausing %s for reset", provider.Title(kind), d.Round(time.Second)))
+	})
+	return prog
 }
 
 // failThreshold parses the --fail-on value into a severity and whether failing
@@ -255,31 +293,9 @@ func runPreflight(ctx context.Context, out io.Writer, opts *options) error {
 		}
 	}
 
-	if opts.cache || opts.refresh {
-		if dc, err := cache.Open(subject + "-" + tokenFingerprint(tok)); err != nil {
-			if !opts.quiet {
-				fmt.Fprintln(os.Stderr, ui.Subtle.Render("cache disabled: "+err.Error()))
-			}
-		} else {
-			if opts.refresh {
-				dc.Clear() // fetch everything fresh this run, then rewrite the cache
-			}
-			coll.SetCache(dc)
-			defer func() { _ = dc.Save() }()
-		}
-	}
+	defer openCache(opts, coll, subject, tok)()
 
-	// --quiet routes progress to nowhere rather than special-casing every call
-	// site: the spinner is the loudest thing on stderr.
-	progOut, progTTY := io.Writer(os.Stderr), term.IsStderrTTY()
-	if opts.quiet {
-		progOut, progTTY = io.Discard, false
-	}
-	prog := progress.New(progOut, progTTY)
-	prog.SetRateFunc(coll.RateStatus)
-	coll.SetOnWait(func(d time.Duration) {
-		prog.Notice(fmt.Sprintf("%s rate limit reached; pausing %s for reset", provider.Title(kind), d.Round(time.Second)))
-	})
+	prog := newProgress(opts, coll, kind)
 	prog.Start()
 	audit, err := buildAudit(ctx, coll, subject, userMode, self, opts, prog)
 	prog.Stop()

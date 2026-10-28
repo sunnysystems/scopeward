@@ -121,6 +121,8 @@ scopeward --org my-org --repo api           # audit a single repository (repeata
 scopeward --me                              # audit your own account & repos (incl. private)
 scopeward --user some-login                 # audit any user's public account
 scopeward tui --org my-org                  # browse findings in an interactive TUI
+scopeward access --org my-org member alice  # every repo alice can reach, and through which team or grant
+scopeward access --org my-org repo api      # everyone who can reach api, and why
 
 scopeward --provider gitlab --org my-group  # GitLab.com
 scopeward --host https://gitlab.acme.com \
