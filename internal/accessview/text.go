@@ -27,6 +27,9 @@ type MemberOptions struct {
 // Member writes one person's reach: org-wide grants, then each repository
 // with something more specific, strongest first.
 func Member(out io.Writer, v access.MemberView, gaps []string, opts MemberOptions) {
+	if len(v.Teams) > 0 {
+		fmt.Fprintf(out, "  %s %s\n\n", ui.Label.Render("Teams"), TeamChains(v.Teams))
+	}
 	if len(v.OrgWide) > 0 {
 		fmt.Fprintln(out, "  "+ui.Label.Render("Every repository"))
 		for _, g := range v.OrgWide {
@@ -81,7 +84,25 @@ func Repo(out io.Writer, v access.RepoView, gaps []string) {
 		}
 		fmt.Fprintln(out)
 	}
-	fmt.Fprintf(out, "  %s %s\n", ui.Label.Render("Repository-specific"), ui.Subtle.Render(fmt.Sprint(len(v.People))))
+	if len(v.Teams) > 0 {
+		fmt.Fprintf(out, "  %s %s\n", ui.Label.Render("Teams"), ui.Subtle.Render(fmt.Sprint(len(v.Teams))))
+		for _, n := range v.Teams {
+			writeTeamNode(out, n, 0)
+		}
+		fmt.Fprintln(out)
+	}
+	if len(v.Direct) > 0 {
+		fmt.Fprintf(out, "  %s %s\n", ui.Label.Render("Direct grants"), ui.Subtle.Render(fmt.Sprint(len(v.Direct))))
+		width := 0
+		for _, d := range v.Direct {
+			width = max(width, len(d.Login))
+		}
+		for _, d := range v.Direct {
+			row(out, fmt.Sprintf("    %s  %-*s  %s", levelCell(d.Level), width, d.Login, ui.Accent.Render(directTags(d))))
+		}
+		fmt.Fprintln(out)
+	}
+	fmt.Fprintf(out, "  %s %s\n", ui.Label.Render("People"), ui.Subtle.Render(fmt.Sprint(len(v.People))))
 	width := 0
 	for _, a := range v.People {
 		width = max(width, len(a.Login))
@@ -91,6 +112,121 @@ func Repo(out io.Writer, v access.RepoView, gaps []string) {
 	}
 	fmt.Fprintln(out)
 	footer(out, gaps)
+}
+
+// Team writes one team's place and reach: its parent, children and
+// maintainers, the org roles it holds, its roster, and every repository it
+// reaches with the team whose grant it is.
+func Team(out io.Writer, v access.TeamView, gaps []string, opts MemberOptions) {
+	line := func(label, value string) {
+		fmt.Fprintf(out, "  %s %s\n", ui.Label.Render(fmt.Sprintf("%-12s", label)), value)
+	}
+	parent := ui.Subtle.Render("none")
+	if len(v.Ancestors) > 0 {
+		parent = strings.Join(v.Ancestors, " → ")
+	}
+	line("Parent", parent)
+	line("Children", orNone(strings.Join(v.Children, ", ")))
+	line("Maintainers", orNone(strings.Join(v.Maintainers, ", ")))
+	for _, r := range v.OrgRoles {
+		line("Org role", levelCell(r.Level)+r.Role+ui.Subtle.Render(" (every repository)"))
+	}
+	fmt.Fprintln(out)
+
+	fmt.Fprintf(out, "  %s %s\n", ui.Label.Render("Members"), ui.Subtle.Render(fmt.Sprint(len(v.Members))))
+	if len(v.Members) > 0 {
+		fmt.Fprintln(out, "    "+strings.Join(v.Members, ", "))
+	}
+	if len(v.Children) > 0 {
+		fmt.Fprintln(out, "    "+ui.Subtle.Render("GitHub counts child teams' members in this roster."))
+	}
+	fmt.Fprintln(out)
+
+	fmt.Fprintf(out, "  %s %s\n", ui.Label.Render("Repositories"), ui.Subtle.Render(fmt.Sprint(len(v.Repos))))
+	width := 0
+	for _, r := range v.Repos {
+		width = max(width, len(r.Repo))
+	}
+	for _, r := range v.Repos {
+		from := ""
+		if r.From != v.Team {
+			from = ui.Subtle.Render("inherited from " + r.From)
+		}
+		row(out, fmt.Sprintf("    %s  %-*s  %s", levelCell(r.Level), width, r.Repo, from))
+	}
+	fmt.Fprintln(out)
+	if !opts.IncludeArchived {
+		fmt.Fprintln(out, "  "+ui.Subtle.Render("Archived repositories are not listed (read-only); "+opts.ArchivedHint+" to see them."))
+	}
+	footer(out, gaps)
+}
+
+// TeamChains renders a person's teams, each with its chain from the root.
+func TeamChains(chains [][]string) string {
+	parts := make([]string, 0, len(chains))
+	for _, c := range chains {
+		parts = append(parts, strings.Join(c, " → "))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// teamMemberPreview is how many members a team row lists before "+N".
+const teamMemberPreview = 8
+
+// writeTeamNode writes a team and the child teams that inherit from it, the
+// level in its own column and the tree in the name column.
+func writeTeamNode(out io.Writer, n access.TeamNode, depth int) {
+	name := n.Team
+	if depth > 0 {
+		name = strings.Repeat("  ", depth-1) + "└ " + n.Team
+	}
+	about := plural(n.Roster, "member")
+	if n.Inherited {
+		about = "inherited · " + about
+	}
+	fmt.Fprintf(out, "    %s  %-24s  %s\n", levelCell(n.Level), name, ui.Subtle.Render(about))
+	if len(n.Members) > 0 {
+		shown := n.Members
+		more := ""
+		if len(shown) > teamMemberPreview {
+			more = fmt.Sprintf(", +%d", len(shown)-teamMemberPreview)
+			shown = shown[:teamMemberPreview]
+		}
+		fmt.Fprintf(out, "    %-8s  %s%s\n", "", strings.Repeat("  ", depth)+"  "+strings.Join(shown, ", "), more)
+	}
+	for _, c := range n.Children {
+		writeTeamNode(out, c, depth+1)
+	}
+}
+
+func directTags(d access.DirectGrant) string {
+	var tags []string
+	if d.Bot {
+		tags = append(tags, "bot")
+	}
+	if d.Outside {
+		tags = append(tags, "outside collaborator")
+	}
+	return strings.Join(tags, " · ")
+}
+
+// row writes a table line without the padding an empty last column leaves.
+func row(out io.Writer, line string) {
+	fmt.Fprintln(out, strings.TrimRight(line, " "))
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return ui.Subtle.Render("none")
+	}
+	return s
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 // RepoNotes are the facts about a repository that change how to read it.
