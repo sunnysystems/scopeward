@@ -18,21 +18,20 @@ var codeownersLocations = []string{".github/CODEOWNERS", "CODEOWNERS", "docs/COD
 // distinguishes it from an @individual or a bare email owner).
 var teamMentionRe = regexp.MustCompile(`@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+`)
 
-// fetchCodeowners looks for a CODEOWNERS file in the recognized locations and,
-// if found, returns the distinct team references (@org/team) it assigns. The
-// bool is false when no file exists in any location. It stops at the first
-// location that resolves.
-func fetchCodeowners(ctx context.Context, client *ghclient.Client, org, repo string) (present bool, teams []string, err error) {
+// fetchCodeowners looks for a CODEOWNERS file in the recognized locations and
+// returns its text. The bool is false when no file exists in any location. It
+// stops at the first location that resolves.
+func fetchCodeowners(ctx context.Context, client *ghclient.Client, org, repo string) (present bool, content string, err error) {
 	for _, path := range codeownersLocations {
 		content, found, ferr := fetchFileContent(ctx, client, org, repo, path)
 		if ferr != nil {
-			return false, nil, ferr
+			return false, "", ferr
 		}
 		if found {
-			return true, parseCodeownersTeams(content), nil
+			return true, content, nil
 		}
 	}
-	return false, nil, nil
+	return false, "", nil
 }
 
 // fetchFileContent gets a single file's decoded text. found is false on 404.
@@ -78,9 +77,28 @@ func parseCodeownersTeams(content string) []string {
 	return teams
 }
 
+// parseCodeownersRules reads a CODEOWNERS file into its rules, in file order.
+// A line is a pattern followed by owners; "#" starts a comment, and GitHub
+// honours no escape for it. GitLab section headers ("[Docs]") are skipped.
+func parseCodeownersRules(content string) []model.CodeownersRule {
+	var rules []model.CodeownersRule
+	for _, line := range strings.Split(content, "\n") {
+		if i := strings.IndexByte(line, '#'); i >= 0 {
+			line = line[:i]
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "[") || strings.HasPrefix(fields[0], "^[") {
+			continue
+		}
+		rules = append(rules, model.CodeownersRule{Pattern: fields[0], Owners: fields[1:]})
+	}
+	return rules
+}
+
 // applyCodeowners records the outcome of a CODEOWNERS lookup onto a repo.
-func applyCodeowners(r *model.Repo, present bool, teams []string) {
+func applyCodeowners(r *model.Repo, present bool, content string) {
 	p := present
 	r.CodeownersPresent = &p
-	r.CodeownersTeams = teams
+	r.CodeownersTeams = parseCodeownersTeams(content)
+	r.CodeownersRules = parseCodeownersRules(content)
 }

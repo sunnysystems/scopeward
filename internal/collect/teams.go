@@ -133,7 +133,7 @@ func collectTeamDetails(ctx context.Context, client *ghclient.Client, org string
 // distinct slice element, so the repo data needs no locking; only the per-kind
 // coverage bookkeeping is synchronized.
 func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string, snap *model.Snapshot, prog Reporter, opts Options) {
-	var grants, keys, hooks, commits, protection, security, alerts, dependabot, depAlerts, workflows, codeowners covTally
+	var grants, keys, hooks, commits, protection, security, alerts, dependabot, depAlerts, workflows, codeowners, agentFilesTally covTally
 	now := Now()
 
 	// Build the target list: non-archived repos, deterministically ordered, and
@@ -211,6 +211,7 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 					r.BranchReqPRReview, r.BranchAllowForcePush = d.reqPR, d.allowForce
 					r.BranchReqStatusChecks, r.BranchEnforceAdmins = d.reqChecks, d.enforceAdmins
 					r.BranchProtectionSource = d.source
+					r.CodeOwnerApprovalRequired = d.codeOwners
 				}
 			}
 		}
@@ -260,11 +261,20 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 			workflows.add(len(wf.issues) + len(wf.agents))
 		}
 
-		if present, teams, err := fetchCodeowners(ctx, client, org, r.Name); err != nil {
+		if present, content, err := fetchCodeowners(ctx, client, org, r.Name); err != nil {
 			codeowners.fail(reasonFor(err, "reading CODEOWNERS"))
 		} else {
-			applyCodeowners(r, present, teams)
+			applyCodeowners(r, present, content)
 			codeowners.add(1)
+		}
+
+		if af, err := fetchAgentFiles(ctx, client, org, r.Name, r.DefaultBranch, org); err != nil {
+			agentFilesTally.fail(reasonFor(err, "listing agent-control files"))
+		} else {
+			assessed := true
+			r.AgentFilesAssessed = &assessed
+			r.AgentControlFiles, r.MCPServers, r.AgentSettings = af.files, af.servers, af.settings
+			agentFilesTally.add(len(af.files))
 		}
 	})
 
@@ -289,6 +299,7 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 	depAlerts.record(snap.Coverage, model.DataOpenDependabotAlerts, attempted)
 	workflows.record(snap.Coverage, model.DataWorkflows, attempted)
 	codeowners.record(snap.Coverage, model.DataCodeowners, attempted)
+	agentFilesTally.record(snap.Coverage, model.DataAgentFiles, attempted)
 
 	// When capped, downgrade the otherwise-OK per-repo coverage to partial so the
 	// report never reads as if every repo was scanned.
@@ -489,6 +500,7 @@ type branchProtectionDetail struct {
 	allowForce    *bool
 	reqChecks     *bool
 	enforceAdmins *bool
+	codeOwners    *bool  // a code owner's review is required
 	source        string // model.BranchProtectionClassic | model.BranchProtectionRuleset
 }
 
@@ -499,7 +511,8 @@ type branchProtectionDetail struct {
 func fetchBranchProtectionDetail(ctx context.Context, client *ghclient.Client, org, repo, branch string) (*branchProtectionDetail, error) {
 	var dto struct {
 		RequiredPullRequestReviews *struct {
-			RequiredApprovingReviewCount int `json:"required_approving_review_count"`
+			RequiredApprovingReviewCount int  `json:"required_approving_review_count"`
+			RequireCodeOwnerReviews      bool `json:"require_code_owner_reviews"`
 		} `json:"required_pull_request_reviews"`
 		AllowForcePushes *struct {
 			Enabled bool `json:"enabled"`
@@ -520,7 +533,8 @@ func fetchBranchProtectionDetail(ctx context.Context, client *ghclient.Client, o
 	pr := dto.RequiredPullRequestReviews != nil && dto.RequiredPullRequestReviews.RequiredApprovingReviewCount > 0
 	force := dto.AllowForcePushes != nil && dto.AllowForcePushes.Enabled
 	checks := dto.RequiredStatusChecks != nil
-	d := &branchProtectionDetail{reqPR: &pr, allowForce: &force, reqChecks: &checks, source: model.BranchProtectionClassic}
+	owners := dto.RequiredPullRequestReviews != nil && dto.RequiredPullRequestReviews.RequireCodeOwnerReviews
+	d := &branchProtectionDetail{reqPR: &pr, allowForce: &force, reqChecks: &checks, codeOwners: &owners, source: model.BranchProtectionClassic}
 	// Absent enforce_admins is left unknown rather than assumed off, so a shape we
 	// did not anticipate degrades to "not evaluated" instead of a false finding.
 	if dto.EnforceAdmins != nil {
@@ -534,7 +548,7 @@ func fetchBranchProtectionDetail(ctx context.Context, client *ghclient.Client, o
 // denominators for those two kinds can account for them.
 //
 // It is a separate, deliberately narrow pass rather than folding archived repos
-// into the main one. Two calls per repo against that pass's eleven, and they get
+// into the main one. Two calls per repo against that pass's dozen-plus, and they get
 // their own --max-repos budget: a graveyard of archived repositories must never
 // consume the cap meant for the ones people still push to.
 //
@@ -619,7 +633,8 @@ func fetchBranchRules(ctx context.Context, client *ghclient.Client, org, repo, b
 type branchRule struct {
 	Type       string `json:"type"`
 	Parameters struct {
-		RequiredApprovingReviewCount int `json:"required_approving_review_count"`
+		RequiredApprovingReviewCount int  `json:"required_approving_review_count"`
+		RequireCodeOwnerReview       bool `json:"require_code_owner_review"`
 	} `json:"parameters"`
 }
 
@@ -631,7 +646,7 @@ func rulesToProtection(rules []branchRule) *branchProtectionDetail {
 	if len(rules) == 0 {
 		return nil
 	}
-	var pr, checks, blocksForce bool
+	var pr, checks, blocksForce, owners bool
 	for _, r := range rules {
 		switch r.Type {
 		case "pull_request":
@@ -639,6 +654,7 @@ func rulesToProtection(rules []branchRule) *branchProtectionDetail {
 			// PR but does not require anyone to look at it — the same state classic
 			// protection reports as "no required review".
 			pr = pr || r.Parameters.RequiredApprovingReviewCount > 0
+			owners = owners || r.Parameters.RequireCodeOwnerReview
 		case "required_status_checks":
 			checks = true
 		case "non_fast_forward":
@@ -647,7 +663,7 @@ func rulesToProtection(rules []branchRule) *branchProtectionDetail {
 	}
 	force := !blocksForce
 	return &branchProtectionDetail{
-		reqPR: &pr, allowForce: &force, reqChecks: &checks,
+		reqPR: &pr, allowForce: &force, reqChecks: &checks, codeOwners: &owners,
 		source: model.BranchProtectionRuleset,
 	}
 }

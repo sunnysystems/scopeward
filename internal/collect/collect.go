@@ -47,7 +47,7 @@ var perRepoKinds = []model.DataKind{
 	model.DataRepoDirectCollaborators, model.DataDeployKeys, model.DataRepoWebhooks,
 	model.DataCommitAuthors, model.DataBranchProtection, model.DataRepoSecurity,
 	model.DataOpenSecretAlerts, model.DataDependabotEnabled, model.DataOpenDependabotAlerts,
-	model.DataWorkflows, model.DataCodeowners,
+	model.DataWorkflows, model.DataCodeowners, model.DataAgentFiles,
 }
 
 // Run collects everything scopeward currently knows how to gather for an org and
