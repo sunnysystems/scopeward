@@ -97,3 +97,99 @@ func TestQuitOnQ(t *testing.T) {
 		t.Error("pressing q should return a quit command")
 	}
 }
+
+// accessAudit is sampleAudit with an access graph behind it: bob and alice in
+// team platform, which can write to api; alice also holds a direct admin grant
+// on infra, which a finding is about; legacy is archived.
+func accessAudit() report.Audit {
+	a := sampleAudit()
+	snap := a.Snapshot
+	snap.Org.DefaultRepoPermission = "read"
+	snap.Members = []model.Member{{Login: "alice", Role: "member"}, {Login: "bob", Role: "member"}}
+	snap.Teams = []model.Team{{Slug: "platform", Members: []string{"alice", "bob"}, RepoGrants: []model.TeamRepoGrant{{Repo: "api", Permission: "write"}}}}
+	snap.Repos = []model.Repo{
+		{Name: "api", Private: true},
+		{Name: "infra", Private: true, DirectCollaborators: []model.RepoGrant{{Login: "alice", Permission: "admin"}}},
+		{Name: "legacy", Private: true, Archived: true},
+	}
+	for _, k := range []model.DataKind{model.DataMembers, model.DataMemberRoles, model.DataTeamMembers, model.DataTeamRepos, model.DataRepoDirectCollaborators, model.DataOrgRoles} {
+		snap.Coverage.OK(k, 1)
+	}
+	a.Report.Findings = append(a.Report.Findings, model.Finding{
+		CheckID: "perms.direct-admin-grant", Title: "alice has direct admin on acme/infra", Severity: model.SevMedium,
+		Axis: model.AxisTeams, Resource: model.ResourceRef{Type: "repo", Name: "acme/infra"},
+	})
+	return a
+}
+
+func readyAccessModel(t *testing.T) appModel {
+	t.Helper()
+	m := newTestModel()
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	next, _ = next.Update(collectedMsg{audit: accessAudit()})
+	return next.(appModel)
+}
+
+func press(m appModel, key string) appModel {
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+	if key == "tab" {
+		msg = tea.KeyMsg{Type: tea.KeyTab}
+	}
+	next, _ := m.Update(msg)
+	return next.(appModel)
+}
+
+func TestAccessTab(t *testing.T) {
+	m := press(readyAccessModel(t), "tab")
+	if m.tab != tabAccess {
+		t.Fatal("tab did not switch to Access")
+	}
+	view := m.View()
+	for _, want := range []string{"Members (2)", "alice", "Every repository", "infra", "direct grant", "Role-based access only"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("access view missing %q", want)
+		}
+	}
+
+	m = press(m, "p")
+	if view := m.View(); !strings.Contains(view, "Repositories (2)") || !strings.Contains(view, "Repository-specific") {
+		t.Errorf("pivot to repositories:\n%s", view)
+	}
+	// Archived repositories are hidden until asked for.
+	m = press(m, "x")
+	if !strings.Contains(m.View(), "Repositories (3)") {
+		t.Errorf("x should list the archived repository too:\n%s", m.View())
+	}
+
+	m = press(m, "tab")
+	if m.tab != tabFindings || !strings.Contains(m.View(), "Problems (") {
+		t.Error("tab should return to the findings")
+	}
+}
+
+// From a finding, the access behind it is one keypress away.
+func TestOpenAccessFromFinding(t *testing.T) {
+	m := readyAccessModel(t)
+	// Groups are ordered by severity: the high 2FA group first, then the
+	// direct-admin group, which holds a single finding about acme/infra.
+	m.list.Select(1)
+	m = press(m, "a")
+	if m.tab != tabAccess || m.pivot != pivotRepos {
+		t.Fatalf("a on a repo finding: tab %v pivot %v", m.tab, m.pivot)
+	}
+	item, ok := m.accessList.SelectedItem().(repoItem)
+	if !ok || item.v.Repo != "infra" {
+		t.Fatalf("selected %+v, want infra", m.accessList.SelectedItem())
+	}
+	if !strings.Contains(m.View(), "acme/infra") || !strings.Contains(m.View(), "alice") {
+		t.Errorf("detail should show who reaches infra:\n%s", m.View())
+	}
+
+	// A finding about a member opens that member.
+	m = press(m, "tab")
+	m.list.Select(0)
+	m = press(m, "a")
+	if mi, ok := m.accessList.SelectedItem().(memberItem); !ok || mi.v.Login != "bob" || m.pivot != pivotMembers {
+		t.Errorf("a on bob's finding selected %+v", m.accessList.SelectedItem())
+	}
+}

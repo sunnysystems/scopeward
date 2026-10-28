@@ -7,20 +7,16 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/sunnysystems/scopeward/internal/access"
+	"github.com/sunnysystems/scopeward/internal/accessview"
 	"github.com/sunnysystems/scopeward/internal/collect"
 	"github.com/sunnysystems/scopeward/internal/model"
 	"github.com/sunnysystems/scopeward/internal/provider"
 	"github.com/sunnysystems/scopeward/internal/ui"
 )
-
-// accessScope is said wherever access is shown: the graph is role-based, and
-// the identities that reach repositories outside it are a different axis.
-const accessScope = "Role-based access only: GitHub Apps, deploy keys and fine-grained tokens reach repositories outside this view (see the Non-Human Identities axis)."
 
 // newAccessCommand builds `scopeward access`: who can reach what in an
 // organization, and by which path. It answers the two questions an access
@@ -175,7 +171,7 @@ func renderAccessMember(out io.Writer, format, org string, v access.MemberView, 
 		return writeJSON(out, map[string]any{
 			"org": org, "member": v.Login, "outside_collaborator": v.Outside,
 			"every_repository": grantsJSON(v.OrgWide), "repositories": repos,
-			"archived_included": includeArchived, "not_assessed": nonNil(gaps), "scope": accessScope,
+			"archived_included": includeArchived, "not_assessed": nonNil(gaps), "scope": accessview.Scope,
 		})
 	case "markdown":
 		fmt.Fprintf(out, "# Access · %s · %s\n\n", org, v.Login)
@@ -189,7 +185,7 @@ func renderAccessMember(out io.Writer, format, org string, v access.MemberView, 
 		}
 		fmt.Fprintf(out, "| Repository | Effective | Through |\n|---|---|---|\n")
 		for _, a := range v.Repos {
-			fmt.Fprintf(out, "| %s | %s | %s |\n", a.Repo, a.Effective, grantPaths(a.Grants))
+			fmt.Fprintf(out, "| %s | %s | %s |\n", a.Repo, a.Effective, accessview.GrantPaths(a.Grants))
 		}
 		fmt.Fprintln(out)
 		writeAccessFooterMarkdown(out, gaps)
@@ -202,42 +198,7 @@ func renderAccessMember(out io.Writer, format, org string, v access.MemberView, 
 	}
 	fmt.Fprintln(out, ui.Title.Render("scopeward")+ui.Subtle.Render(" · access · "+org+" · ")+ui.Accent.Render(who))
 	fmt.Fprintln(out)
-	if len(v.OrgWide) > 0 {
-		fmt.Fprintln(out, "  "+ui.Label.Render("Every repository"))
-		for _, g := range v.OrgWide {
-			fmt.Fprintf(out, "    %s  %s\n", levelCell(g.Level), g.Path())
-		}
-		fmt.Fprintln(out)
-	}
-	fmt.Fprintf(out, "  %s %s\n", ui.Label.Render("Specific repositories"), ui.Subtle.Render(fmt.Sprint(len(v.Repos))))
-	if len(v.Repos) == 0 {
-		fmt.Fprintln(out, "    "+ui.Subtle.Render("none beyond what every repository grants"))
-	}
-	// When an org-wide grant beats every specific one (an owner), say so once
-	// instead of on every line: the list then only matters if that changes.
-	overridden := len(v.OrgWide) > 0 && len(v.Repos) > 0
-	for _, a := range v.Repos {
-		overridden = overridden && a.TopSpecific() <= v.OrgWide[0].Level
-	}
-	if overridden {
-		top := v.OrgWide[0]
-		fmt.Fprintln(out, "    "+ui.Subtle.Render(fmt.Sprintf("none goes beyond %s (%s everywhere); they matter only if that changes", top.Path(), top.Level)))
-	}
-	width := 0
-	for _, a := range v.Repos {
-		width = max(width, len(a.Repo))
-	}
-	for _, a := range v.Repos {
-		if overridden {
-			a.Effective, a.RaisedBy = a.TopSpecific(), nil
-		}
-		fmt.Fprintf(out, "    %s  %-*s  %s\n", levelCell(a.Effective), width, a.Repo, describeGrants(a))
-	}
-	fmt.Fprintln(out)
-	if !includeArchived {
-		fmt.Fprintln(out, "  "+ui.Subtle.Render("Archived repositories are not listed (read-only); pass --include-archived to see them."))
-	}
-	writeAccessFooter(out, gaps)
+	accessview.Member(out, v, gaps, accessview.MemberOptions{IncludeArchived: includeArchived, ArchivedHint: "pass --include-archived"})
 	return nil
 }
 
@@ -264,19 +225,19 @@ func renderAccessRepo(out io.Writer, format, org string, v access.RepoView, gaps
 		}
 		return writeJSON(out, map[string]any{
 			"org": org, "repo": v.Repo, "public": v.Public, "archived": v.Archived,
-			"org_wide": groups, "people": people, "not_assessed": nonNil(gaps), "scope": accessScope,
+			"org_wide": groups, "people": people, "not_assessed": nonNil(gaps), "scope": accessview.Scope,
 		})
 	case "markdown":
 		fmt.Fprintf(out, "# Access · %s/%s\n\n", org, v.Repo)
-		for _, note := range repoNotes(v) {
+		for _, note := range accessview.RepoNotes(v) {
 			fmt.Fprintf(out, "_%s_\n\n", note)
 		}
 		fmt.Fprintf(out, "| Who | Level | Through |\n|---|---|---|\n")
 		for _, ow := range v.OrgWide {
-			fmt.Fprintf(out, "| %s | %s | %s |\n", orgWideWho(ow, 1<<30), ow.Grant.Level, ow.Grant.Path())
+			fmt.Fprintf(out, "| %s | %s | %s |\n", accessview.OrgWideWho(ow, 1<<30), ow.Grant.Level, ow.Grant.Path())
 		}
 		for _, a := range v.People {
-			fmt.Fprintf(out, "| %s | %s | %s |\n", personLabel(a), a.Effective, grantPaths(a.Grants))
+			fmt.Fprintf(out, "| %s | %s | %s |\n", accessview.PersonLabel(a), a.Effective, accessview.GrantPaths(a.Grants))
 		}
 		fmt.Fprintln(out)
 		writeAccessFooterMarkdown(out, gaps)
@@ -284,121 +245,13 @@ func renderAccessRepo(out io.Writer, format, org string, v access.RepoView, gaps
 	}
 
 	fmt.Fprintln(out, ui.Title.Render("scopeward")+ui.Subtle.Render(" · access · ")+ui.Accent.Render(org+"/"+v.Repo))
-	for _, note := range repoNotes(v) {
-		fmt.Fprintln(out, "  "+ui.WarnTag.Render(note))
-	}
 	fmt.Fprintln(out)
-	if len(v.OrgWide) > 0 {
-		fmt.Fprintln(out, "  "+ui.Label.Render("Org-wide"))
-		for _, ow := range v.OrgWide {
-			fmt.Fprintf(out, "    %s  %s  %s\n", levelCell(ow.Grant.Level), ow.Grant.Path(), ui.Subtle.Render(orgWideWho(ow, 8)))
-		}
-		fmt.Fprintln(out)
-	}
-	fmt.Fprintf(out, "  %s %s\n", ui.Label.Render("Repository-specific"), ui.Subtle.Render(fmt.Sprint(len(v.People))))
-	width := 0
-	for _, a := range v.People {
-		width = max(width, len(a.Login))
-	}
-	for _, a := range v.People {
-		fmt.Fprintf(out, "    %s  %-*s  %s\n", levelCell(a.Effective), width, a.Login, describeGrants(a))
-	}
-	fmt.Fprintln(out)
-	writeAccessFooter(out, gaps)
+	accessview.Repo(out, v, gaps)
 	return nil
 }
 
-func repoNotes(v access.RepoView) []string {
-	var notes []string
-	if v.Public {
-		notes = append(notes, "public: anyone can read it")
-	}
-	if v.Archived {
-		notes = append(notes, "archived: read-only, and its direct grants are not collected")
-	}
-	return notes
-}
-
-// --- shared ---
-
-// levelCell is a fixed-width level, coloured by how much it can do.
-func levelCell(l access.Level) string {
-	cell := fmt.Sprintf("%-8s", l)
-	switch {
-	case l >= access.Admin:
-		return ui.Bad.Render(cell)
-	case l >= access.Write:
-		return ui.WarnTag.Render(cell)
-	default:
-		return ui.Subtle.Render(cell)
-	}
-}
-
-// describeGrants is the first path, then any others, then what makes the
-// effective level higher than every specific grant.
-func describeGrants(a access.Access) string {
-	parts := []string{}
-	for i, g := range a.Grants {
-		if i == 0 {
-			parts = append(parts, g.Path())
-		} else {
-			parts = append(parts, ui.Subtle.Render("also "+g.Level.String()+" "+g.Path()))
-		}
-	}
-	if a.RaisedBy != nil {
-		parts = append(parts, ui.Subtle.Render("("+a.Effective.String()+" as "+a.RaisedBy.Path()+")"))
-	}
-	var tags []string
-	if a.Bot {
-		tags = append(tags, "bot")
-	}
-	if a.Outside {
-		tags = append(tags, "outside collaborator")
-	}
-	if len(tags) > 0 {
-		parts = append(parts, ui.Accent.Render(strings.Join(tags, " · ")))
-	}
-	return strings.Join(parts, "  ")
-}
-
-func grantPaths(gs []access.Grant) string {
-	ps := make([]string, 0, len(gs))
-	for _, g := range gs {
-		ps = append(ps, g.Level.String()+" "+g.Path())
-	}
-	return strings.Join(ps, "; ")
-}
-
-func personLabel(a access.Access) string {
-	label := a.Login
-	if a.Bot {
-		label += " (bot)"
-	}
-	if a.Outside {
-		label += " (outside collaborator)"
-	}
-	return label
-}
-
-func orgWideWho(ow access.OrgWide, limit int) string {
-	if ow.Everyone {
-		return "every member"
-	}
-	if len(ow.Logins) <= limit {
-		return strings.Join(ow.Logins, ", ")
-	}
-	return strings.Join(ow.Logins[:limit], ", ") + fmt.Sprintf(" and %d more", len(ow.Logins)-limit)
-}
-
-func writeAccessFooter(out io.Writer, gaps []string) {
-	fmt.Fprintln(out, "  "+ui.Subtle.Render(accessScope))
-	for _, gap := range gaps {
-		fmt.Fprintln(out, "  "+ui.WarnTag.Render("Not assessed: ")+gap)
-	}
-}
-
 func writeAccessFooterMarkdown(out io.Writer, gaps []string) {
-	fmt.Fprintf(out, "_%s_\n", accessScope)
+	fmt.Fprintf(out, "_%s_\n", accessview.Scope)
 	for _, gap := range gaps {
 		fmt.Fprintf(out, "\n**Not assessed:** %s\n", gap)
 	}
