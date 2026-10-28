@@ -75,12 +75,13 @@ var checkCategory = map[string]string{
 	"teams.members-can-create-public-repos": "Team & ownership structure",
 	"teams.members-can-fork-private-repos":  "Team & ownership structure",
 
-	// AI agent governance — machine identities committing code.
-	"ai.agent-broad-write":       "AI agent governance",
-	"ai.agent-inventory":         "AI agent governance",
-	"ai.unidentified-committer":  "AI agent governance",
-	"ai.copilot-seat-inactive":   "AI agent governance",
-	"ai.copilot-seat-non-member": "AI agent governance",
+	// AI agent governance — machine identities committing code, and agents in CI.
+	"ai.agent-broad-write":                "AI agent governance",
+	"ai.agent-inventory":                  "AI agent governance",
+	"ai.agent-workflow-untrusted-trigger": "AI agent governance",
+	"ai.unidentified-committer":           "AI agent governance",
+	"ai.copilot-seat-inactive":            "AI agent governance",
+	"ai.copilot-seat-non-member":          "AI agent governance",
 
 	// Repository hygiene — stale/abandoned repositories.
 	"hygiene.stale-repo": "Repository hygiene",

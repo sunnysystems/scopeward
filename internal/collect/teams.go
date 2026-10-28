@@ -251,11 +251,13 @@ func collectRepoDetails(ctx context.Context, client *ghclient.Client, org string
 			}
 		}
 
-		if wf, err := fetchWorkflowIssues(ctx, client, org, r.Name); err != nil {
+		if wf, err := fetchWorkflows(ctx, client, org, r.Name); err != nil {
 			workflows.fail(reasonFor(err, "scanning Actions workflows"))
 		} else {
-			r.WorkflowIssues = wf
-			workflows.add(len(wf))
+			r.WorkflowIssues = wf.issues
+			r.AgentWorkflows = wf.agents
+			r.UntrustedExternalCalls = wf.externalCalls
+			workflows.add(len(wf.issues) + len(wf.agents))
 		}
 
 		if present, teams, err := fetchCodeowners(ctx, client, org, r.Name); err != nil {

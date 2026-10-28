@@ -188,7 +188,8 @@ func (agentInventory) Meta() check.CheckMeta {
 func (c agentInventory) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	agents := buildAgents(s)
 	assisted := buildAssisted(s)
-	if len(agents) == 0 && len(assisted) == 0 {
+	ci, unassessed := ciAgents(s)
+	if len(agents) == 0 && len(assisted) == 0 && len(ci) == 0 && len(unassessed) == 0 {
 		return nil
 	}
 
@@ -237,14 +238,51 @@ func (c agentInventory) Run(_ context.Context, s *model.Snapshot) []model.Findin
 	if len(assisted) > 0 {
 		remediation += " A coding agent acting through a person's account holds that person's access, so its gate is review on the default branch, not a narrower credential."
 	}
+	if len(ci) > 0 {
+		remediation += " An agent in CI is gated by who may trigger its workflow and bounded by the job's permissions and secrets."
+	}
 
 	switch {
+	case len(agents) == 0 && len(assisted) == 0:
+		// Only CI agents (or only unassessed calls): the title is theirs below.
 	case len(assisted) == 0:
 		title = fmt.Sprintf("%d machine identities committed code in the last 90 days", len(agents))
 	case len(agents) == 0:
 		title = fmt.Sprintf("%s co-wrote %s in the last 90 days", plural(len(assisted), "coding agent"), plural(assistedCommits(assisted), "commit"))
 	default:
 		title = fmt.Sprintf("%d machine identities and %s committed code in the last 90 days", len(agents), plural(len(assisted), "coding agent"))
+	}
+
+	if len(ci) > 0 || len(unassessed) > 0 {
+		exposed := 0
+		for _, j := range ci {
+			if j["exposed"] == true {
+				exposed++
+			}
+		}
+		if len(ci) > 0 {
+			evidence["ci"] = ci
+			jobsRun := plural(len(ci), "workflow job") + " run"
+			if len(ci) == 1 {
+				jobsRun = "1 workflow job runs"
+			}
+			if title == "" {
+				title = jobsRun + " an AI agent in CI"
+			} else {
+				title += "; " + jobsRun + " an AI agent in CI"
+			}
+			description = appendSentence(description, jobsRun+" an AI agent in Actions, listed under ci with the events that trigger it and the gate in front of it.")
+			if exposed > 0 {
+				description += fmt.Sprintf(" %d of them can be steered by an account without write access (see ai.agent-workflow-untrusted-trigger).", exposed)
+			}
+		}
+		if len(unassessed) > 0 {
+			evidence["unassessed_workflow_calls"] = unassessed
+			if title == "" {
+				title = plural(len(unassessed), "workflow job") + " a non-writer can trigger call into other repositories"
+			}
+			description = appendSentence(description, fmt.Sprintf("%s that a non-writer can trigger hand off to reusable workflows in other repositories. Those were not read, so whether they run an agent was not assessed.", plural(len(unassessed), "workflow job")))
+		}
 	}
 
 	return []model.Finding{{
@@ -258,6 +296,35 @@ func (c agentInventory) Run(_ context.Context, s *model.Snapshot) []model.Findin
 		Remediation: remediation,
 		DocsURL:     "https://docs.github.com/apps/overview",
 	}}
+}
+
+// ciAgents lists every Actions job that runs an AI agent, org-wide, and the
+// calls into other repositories' reusable workflows that a non-writer can
+// trigger. A job is "exposed" when a non-writer can fire it past its gate.
+func ciAgents(s *model.Snapshot) ([]map[string]any, []string) {
+	var jobs []map[string]any
+	var unassessed []string
+	for _, r := range activeRepos(s) {
+		for _, aw := range r.AgentWorkflows {
+			jobs = append(jobs, map[string]any{
+				"repo": r.Name, "file": aw.File, "job": aw.Job, "agent": aw.Agent,
+				"triggers": aw.UntrustedTriggers, "gate": aw.Gate,
+				"exposed": len(aw.UntrustedTriggers) > 0 && aw.Gate != "closed",
+			})
+		}
+		for _, call := range r.UntrustedExternalCalls {
+			unassessed = append(unassessed, r.Name+"/"+call)
+		}
+	}
+	return jobs, unassessed
+}
+
+// appendSentence adds sentence b after text a.
+func appendSentence(a, b string) string {
+	if a == "" {
+		return b
+	}
+	return a + " " + b
 }
 
 // unprotectedAssistedRepos is the union of the repos where any agent's code

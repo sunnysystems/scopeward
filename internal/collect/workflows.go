@@ -20,10 +20,18 @@ var (
 	shaRe  = regexp.MustCompile(`^[0-9a-f]{40}$`)
 )
 
-// fetchWorkflowIssues reads a repo's Actions workflow files and returns
-// supply-chain concerns. A repo with no workflows (404 on the dir) yields no
-// issues and no error.
-func fetchWorkflowIssues(ctx context.Context, client *ghclient.Client, org, repo string) ([]model.WorkflowIssue, error) {
+// repoWorkflows is what a repository's Actions workflow files say: supply-chain
+// concerns, the jobs that run an AI agent, and calls a non-writer can trigger
+// into reusable workflows in other repositories.
+type repoWorkflows struct {
+	issues        []model.WorkflowIssue
+	agents        []model.AgentWorkflow
+	externalCalls []string
+}
+
+// fetchWorkflows reads a repo's Actions workflow files. A repo with no workflows
+// (404 on the dir) yields nothing and no error.
+func fetchWorkflows(ctx context.Context, client *ghclient.Client, org, repo string) (repoWorkflows, error) {
 	type contentItem struct {
 		Name     string `json:"name"`
 		Path     string `json:"path"`
@@ -32,22 +40,23 @@ func fetchWorkflowIssues(ctx context.Context, client *ghclient.Client, org, repo
 		Encoding string `json:"encoding"`
 	}
 
+	var out repoWorkflows
 	var dir []contentItem
 	if _, err := client.Get(ctx, "/repos/"+org+"/"+repo+"/contents/.github/workflows", nil, &dir); err != nil {
 		if ghclient.StatusCode(err) == 404 {
-			return nil, nil // no workflows
+			return out, nil // no workflows
 		}
-		return nil, err
+		return out, err
 	}
 
-	var issues []model.WorkflowIssue
+	files := map[string]string{}
 	for _, item := range dir {
 		if item.Type != "file" || !isWorkflowFile(item.Name) {
 			continue
 		}
 		var file contentItem
 		if _, err := client.Get(ctx, "/repos/"+org+"/"+repo+"/contents/"+item.Path, nil, &file); err != nil {
-			return issues, err
+			return out, err
 		}
 		content := file.Content
 		if file.Encoding == "base64" {
@@ -56,9 +65,11 @@ func fetchWorkflowIssues(ctx context.Context, client *ghclient.Client, org, repo
 				content = string(decoded)
 			}
 		}
-		issues = append(issues, scanWorkflow(item.Name, content, org)...)
+		out.issues = append(out.issues, scanWorkflow(item.Name, content, org)...)
+		files[item.Name] = content
 	}
-	return issues, nil
+	out.agents, out.externalCalls = scanAgentWorkflows(files, org+"/"+repo)
+	return out, nil
 }
 
 func isWorkflowFile(name string) bool {
