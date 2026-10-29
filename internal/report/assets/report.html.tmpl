@@ -245,6 +245,13 @@
   .lvl-admin{color:var(--danger)}
   .lvl-write{color:var(--amber)}
   .lvl-read{color:var(--gray-mid)}
+  .acc-body .acc-h{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--gray-mid);margin:10px 0 2px}
+  table.acc-facts{border-collapse:collapse;font-size:13px;margin:4px 0}
+  table.acc-facts td{padding:2px 14px 2px 0;vertical-align:top}
+  table.acc-facts td:first-child{color:var(--gray-mid);white-space:nowrap}
+  table.acc td.subj.d1{padding-left:18px}
+  table.acc td.subj.d2{padding-left:36px}
+  table.acc td.subj.d3{padding-left:54px}
   a.acc-link{margin-left:8px;font-size:11px;color:var(--gray-mid);border:1px solid var(--line);border-radius:var(--radius-sm);padding:0 5px}
   a.acc-link:hover{color:var(--amber);border-color:var(--amber);text-decoration:none}
 </style>
@@ -389,7 +396,7 @@
 {{with .Access}}
 <h2 class="axis" id="access">Access</h2>
 <div class="access">
-  <p class="acc-scope">Who can reach which repository, and by which path: organization ownership, the base permission, organization roles, team grants through nested teams, and direct grants. {{.Scope}}</p>
+  <p class="acc-scope">Who can reach which repository, and by which path: organization ownership, the base permission, organization roles, team grants through nested teams, and direct grants. Each repository is read team by team, then by direct grant, then person by person. {{.Scope}}</p>
   {{range .Gaps}}<p class="acc-gap">Not assessed: {{.}}</p>{{end}}
   {{if .TooLarge}}<p class="acc-note">{{.TooLarge}}</p>{{else}}
   <input id="acc-search" class="sw-search acc-search" type="search" autocomplete="off" placeholder="Find a member, repository or team…">
@@ -397,6 +404,10 @@
     <summary class="axissum">By member<span class="line"></span><span class="axiscount">{{len .Members}}</span></summary>
     {{range .Members}}{{template "accrow" .}}{{end}}
   </details>
+  {{if .Teams}}<details class="axissection">
+    <summary class="axissum">By team<span class="line"></span><span class="axiscount">{{len .Teams}}</span></summary>
+    {{range .Teams}}{{template "accrow" .}}{{end}}
+  </details>{{end}}
   <details class="axissection">
     <summary class="axissum">By repository<span class="line"></span><span class="axiscount">{{len .Repos}}{{if .Archived}} · {{.Archived}} archived not listed{{end}}</span></summary>
     {{range .Repos}}{{template "accrow" .}}{{end}}
@@ -532,9 +543,18 @@
   <summary><b>{{.Name}}</b>{{if .Tag}}<span class="acc-tag">{{.Tag}}</span>{{end}}<span class="acc-sum">{{.Summary}}</span></summary>
   <div class="acc-body">
     {{range .Notes}}<p class="acc-note">{{.}}</p>{{end}}
-    <table class="acc">
+    {{if .Facts}}<table class="acc-facts">{{range .Facts}}<tr><td>{{.Label}}</td><td>{{.Value}}</td></tr>{{end}}</table>{{end}}
+    {{if .OrgWide}}<p class="acc-h">Org-wide</p><table class="acc">
     {{range .OrgWide}}<tr class="ow"><td class="lvl {{.LevelClass}}">{{.Level}}</td><td class="subj">{{if .Subject}}{{.Subject}}{{else}}every repository{{end}}</td><td class="path">{{.Path}}</td></tr>{{end}}
+    </table>{{end}}
+    {{if .Teams}}<p class="acc-h">Teams</p><table class="acc">
+    {{range .Teams}}<tr><td class="lvl {{.LevelClass}}">{{.Level}}</td><td class="subj d{{.Depth}}">{{if .Depth}}└ {{end}}{{.Team}}</td><td class="path">{{.About}}{{if .Members}}<br><span class="why">{{.Members}}</span>{{end}}</td></tr>{{end}}
+    </table>{{end}}
+    {{if .Direct}}<p class="acc-h">Direct grants</p><table class="acc">
+    {{range .Direct}}<tr><td class="lvl {{.LevelClass}}">{{.Level}}</td><td class="subj">{{.Subject}}</td><td class="path"></td></tr>{{end}}
+    </table>{{end}}
+    {{if .Lines}}<p class="acc-h">{{.LinesHeading}}</p><table class="acc">
     {{range .Lines}}<tr><td class="lvl {{.LevelClass}}">{{.Level}}</td><td class="subj">{{.Subject}}</td><td class="path">{{.Path}}{{if .Note}} <span class="why">({{.Note}})</span>{{end}}</td></tr>{{end}}
-    </table>
+    </table>{{end}}
   </div>
 </details>{{end}}

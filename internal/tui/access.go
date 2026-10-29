@@ -50,7 +50,7 @@ func (i memberItem) Description() string {
 	if len(i.v.OrgWide) > 0 && i.v.OrgWide[0].Kind == access.SourceOwner {
 		return "   owner · admin everywhere"
 	}
-	return fmt.Sprintf("   %d repositories · up to %s", len(i.v.Repos), i.top)
+	return "   " + count(len(i.v.Repos), "repository", "repositories") + " · up to " + i.top.String()
 }
 
 func (i memberItem) FilterValue() string { return i.v.Login }
@@ -88,7 +88,7 @@ func (i teamItem) Title() string {
 }
 
 func (i teamItem) Description() string {
-	return fmt.Sprintf("   %d members · %d repositories", len(i.v.Members), len(i.v.Repos))
+	return "   " + count(len(i.v.Members), "member", "members") + " · " + count(len(i.v.Repos), "repository", "repositories")
 }
 
 // FilterValue matches by slug and by display name, the one findings carry.
@@ -217,6 +217,14 @@ func (m *appModel) openAccessFor(res model.ResourceRef) bool {
 	}
 	m.tab = tabAccess
 	return true
+}
+
+// count renders "1 repository" / "3 repositories".
+func count(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
 }
 
 var pivotTitle = map[pivot]string{pivotMembers: "Members", pivotRepos: "Repositories", pivotTeams: "Teams"}

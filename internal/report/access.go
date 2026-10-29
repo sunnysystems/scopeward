@@ -23,6 +23,7 @@ type accessHTMLView struct {
 	Scope    string
 	Gaps     []string
 	Members  []accessRowView
+	Teams    []accessRowView
 	Repos    []accessRowView
 	Archived int    // archived repositories left out
 	TooLarge string // set instead of the rows when the graph is too large
@@ -33,12 +34,31 @@ type accessHTMLView struct {
 type accessRowView struct {
 	Anchor  string
 	Name    string
-	Tag     string // "owner", "outside collaborator", "bot", "public", "archived"
+	Tag     string // "owner", "outside collaborator", "public", "archived", or a team's parent chain
 	Summary string
 	Notes   []string
-	OrgWide []accessLineView
-	Lines   []accessLineView
-	Search  string
+	Facts   []accessFact     // labelled facts: a member's teams, a team's parent and roster
+	OrgWide []accessLineView // grants on every repository
+	Teams   []accessTeamLine // a repository's teams, the tree flattened
+	Direct  []accessLineView // a repository's direct grants
+	// Lines are the row's main list under LinesHeading: a member's or a
+	// team's repositories, a repository's people.
+	LinesHeading string
+	Lines        []accessLineView
+	Search       string
+}
+
+// accessFact is one labelled fact in a row.
+type accessFact struct{ Label, Value string }
+
+// accessTeamLine is one team in a repository's tree, flattened with its depth.
+type accessTeamLine struct {
+	Depth      int // 0 for a team holding the grant, capped at 3 for indentation
+	Team       string
+	Level      string
+	LevelClass string
+	About      string // roster size, and whether the level is inherited
+	Members    string // members listed at this level of the tree
 }
 
 // accessLineView is one row of grants: the level, who or what it is about,
@@ -67,6 +87,11 @@ func findingAccessAnchor(r model.ResourceRef) string {
 		return accessAnchor("r", r.Name[strings.LastIndex(r.Name, "/")+1:])
 	case "member":
 		return accessAnchor("m", r.Name)
+	case "team":
+		// Team findings carry the display name; the slug ends their URL.
+		if i := strings.LastIndex(r.URL, "/teams/"); i >= 0 {
+			return accessAnchor("t", r.URL[i+len("/teams/"):])
+		}
 	}
 	return ""
 }
@@ -99,6 +124,10 @@ func buildAccessHTML(s *model.Snapshot) *accessHTMLView {
 		r, _ := g.ForRepo(name)
 		rows += len(r.People)
 	}
+	for _, slug := range g.Teams() {
+		t, _ := g.ForTeam(slug, access.Options{})
+		rows += len(t.Repos)
+	}
 	if rows > accessRowLimit {
 		v.TooLarge = fmt.Sprintf("This organization's access graph has %d rows, too many for a static report. Run `scopeward access --org %s member <login>` or `repo <name>`, or open the Access tab in `scopeward tui`.", rows, s.Org.Login)
 		return v
@@ -108,6 +137,10 @@ func buildAccessHTML(s *model.Snapshot) *accessHTMLView {
 		m, _ := g.ForMember(login, access.Options{})
 		v.Members = append(v.Members, memberRow(m))
 	}
+	for _, slug := range g.Teams() {
+		t, _ := g.ForTeam(slug, access.Options{})
+		v.Teams = append(v.Teams, teamRow(t))
+	}
 	for _, name := range g.Repos(access.Options{}) {
 		r, _ := g.ForRepo(name)
 		v.Repos = append(v.Repos, repoRow(r))
@@ -115,9 +148,74 @@ func buildAccessHTML(s *model.Snapshot) *accessHTMLView {
 	return v
 }
 
+func teamRow(t access.TeamView) accessRowView {
+	row := accessRowView{
+		Anchor: accessAnchor("t", t.Team), Name: t.Team, LinesHeading: "Repositories",
+		Summary: plural(len(t.Members), "member") + " · " + repositories(len(t.Repos)),
+	}
+	if len(t.Ancestors) > 0 {
+		row.Tag = "in " + strings.Join(t.Ancestors, " → ")
+	}
+	search := []string{t.Team, t.Name}
+	if len(t.Children) > 0 {
+		row.Facts = append(row.Facts, accessFact{"Children", strings.Join(t.Children, ", ")})
+	}
+	if len(t.Maintainers) > 0 {
+		row.Facts = append(row.Facts, accessFact{"Maintainers", strings.Join(t.Maintainers, ", ")})
+	}
+	for _, r := range t.OrgRoles {
+		row.Facts = append(row.Facts, accessFact{"Org role", r.Level.String() + " " + r.Role + " (every repository)"})
+	}
+	row.Facts = append(row.Facts, accessFact{fmt.Sprintf("Members (%d)", len(t.Members)), strings.Join(t.Members, ", ")})
+	if len(t.Children) > 0 {
+		row.Notes = append(row.Notes, "GitHub counts child teams' members in this roster.")
+	}
+	for _, r := range t.Repos {
+		line := accessLineView{Level: r.Level.String(), LevelClass: levelClass(r.Level), Subject: r.Repo}
+		if r.From != t.Team {
+			line.Path = "inherited from " + r.From
+		}
+		row.Lines = append(row.Lines, line)
+		search = append(search, r.Repo)
+	}
+	search = append(search, t.Members...)
+	row.Search = strings.ToLower(strings.Join(search, " "))
+	return row
+}
+
+// repositories counts repositories; plural would spell it "repositorys".
+func repositories(n int) string {
+	if n == 1 {
+		return "1 repository"
+	}
+	return fmt.Sprintf("%d repositories", n)
+}
+
+// teamLines flattens a repository's team tree for the template.
+func teamLines(ns []access.TeamNode, depth int) []accessTeamLine {
+	var out []accessTeamLine
+	for _, n := range ns {
+		about := plural(n.Roster, "member")
+		if n.Inherited {
+			about = "inherited · " + about
+		}
+		out = append(out, accessTeamLine{
+			Depth: min(depth, 3), Team: n.Team, Level: n.Level.String(), LevelClass: levelClass(n.Level),
+			About: about, Members: strings.Join(n.Members, ", "),
+		})
+		out = append(out, teamLines(n.Children, depth+1)...)
+	}
+	return out
+}
+
 func memberRow(m access.MemberView) accessRowView {
-	row := accessRowView{Anchor: accessAnchor("m", m.Login), Name: m.Login}
+	row := accessRowView{Anchor: accessAnchor("m", m.Login), Name: m.Login, LinesHeading: "Specific repositories"}
 	search := []string{m.Login}
+	if len(m.Teams) > 0 {
+		chains := accessview.TeamChains(m.Teams)
+		row.Facts = append(row.Facts, accessFact{"Teams", chains})
+		search = append(search, chains)
+	}
 	top := access.None
 	for _, g := range m.OrgWide {
 		row.OrgWide = append(row.OrgWide, accessLineView{Level: g.Level.String(), LevelClass: levelClass(g.Level), Path: g.Path()})
@@ -156,14 +254,24 @@ func memberRow(m access.MemberView) accessRowView {
 	if owner {
 		row.Summary = "admin everywhere"
 	} else {
-		row.Summary = fmt.Sprintf("%d repositories · up to %s", len(m.Repos), top)
+		row.Summary = repositories(len(m.Repos)) + " · up to " + top.String()
 	}
 	row.Search = strings.ToLower(strings.Join(search, " "))
 	return row
 }
 
 func repoRow(r access.RepoView) accessRowView {
-	row := accessRowView{Anchor: accessAnchor("r", r.Repo), Name: r.Repo, Notes: accessview.RepoNotes(r)}
+	row := accessRowView{Anchor: accessAnchor("r", r.Repo), Name: r.Repo, Notes: accessview.RepoNotes(r), LinesHeading: "People", Teams: teamLines(r.Teams, 0)}
+	for _, d := range r.Direct {
+		subject := d.Login
+		if d.Bot {
+			subject += " (bot)"
+		}
+		if d.Outside {
+			subject += " (outside collaborator)"
+		}
+		row.Direct = append(row.Direct, accessLineView{Level: d.Level.String(), LevelClass: levelClass(d.Level), Subject: subject})
+	}
 	switch {
 	case r.Archived:
 		row.Tag = "archived"
@@ -215,6 +323,9 @@ func linkFindingsToAccess(v *htmlView) {
 	rows := map[string]bool{}
 	if v.Access != nil {
 		for _, r := range v.Access.Members {
+			rows[r.Anchor] = true
+		}
+		for _, r := range v.Access.Teams {
 			rows[r.Anchor] = true
 		}
 		for _, r := range v.Access.Repos {
