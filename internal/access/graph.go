@@ -94,6 +94,9 @@ func (a Access) TopSpecific() Level {
 type MemberView struct {
 	Login   string
 	Outside bool
+	// Teams are the teams the person is in, each as its chain from the root
+	// team down ("platform", "payments").
+	Teams [][]string
 	// OrgWide are the grants that apply to every repository.
 	OrgWide []Grant
 	// Repos are the repositories where something repository-specific applies,
@@ -114,6 +117,11 @@ type RepoView struct {
 	Public   bool // anyone can read it
 	Archived bool // read-only: write grants are inert until it is unarchived
 	OrgWide  []OrgWide
+	// Teams are the teams holding a grant on the repository, with the child
+	// teams that inherit it nested underneath; Direct are collaborator grants
+	// on the repository itself. Together they say why; People says who.
+	Teams  []TeamNode
+	Direct []DirectGrant
 	// People are those with a repository-specific grant, strongest first.
 	People []Access
 }
@@ -128,25 +136,28 @@ type Options struct {
 
 // Graph is the resolved access of one organization.
 type Graph struct {
-	repos    map[string]model.Repo
-	members  map[string]bool
-	outside  map[string]bool
-	bots     map[string]bool
-	orgWide  map[string][]Grant            // login → grants on every repository
-	specific map[string]map[string][]Grant // login → repo → grants
-	gaps     []string
+	repos     map[string]model.Repo
+	members   map[string]bool
+	outside   map[string]bool
+	bots      map[string]bool
+	orgWide   map[string][]Grant            // login → grants on every repository
+	specific  map[string]map[string][]Grant // login → repo → grants
+	tree      teamTree
+	teamRoles map[string][]Grant // team → all-repository org roles it holds
+	gaps      []string
 }
 
 // Build resolves a snapshot's access. It never fails: what was not collected
 // is recorded as a gap, and the views say so rather than guess.
 func Build(s *model.Snapshot) *Graph {
 	g := &Graph{
-		repos:    map[string]model.Repo{},
-		members:  map[string]bool{},
-		outside:  map[string]bool{},
-		bots:     map[string]bool{},
-		orgWide:  map[string][]Grant{},
-		specific: map[string]map[string][]Grant{},
+		repos:     map[string]model.Repo{},
+		members:   map[string]bool{},
+		outside:   map[string]bool{},
+		bots:      map[string]bool{},
+		orgWide:   map[string][]Grant{},
+		specific:  map[string]map[string][]Grant{},
+		teamRoles: map[string][]Grant{},
 	}
 	g.gaps = gaps(s)
 	for _, r := range s.Repos {
@@ -168,6 +179,7 @@ func Build(s *model.Snapshot) *Graph {
 	}
 
 	teams := newTeamTree(s.Teams)
+	g.tree = teams
 	for _, role := range s.OrgRoles {
 		level := ParseLevel(role.BaseRole)
 		if level == None {
@@ -176,6 +188,7 @@ func Build(s *model.Snapshot) *Graph {
 		holders := map[string][]Grant{}
 		viaTeam := map[string]bool{}
 		for _, t := range role.Teams {
+			g.teamRoles[t.Slug] = append(g.teamRoles[t.Slug], Grant{Level: level, Kind: SourceOrgRole, Role: role.Name})
 			for _, login := range teams.members(t.Slug) {
 				holders[login] = append(holders[login], Grant{Level: level, Kind: SourceOrgRole, Role: role.Name, Teams: teams.chain(t.Slug, login)})
 				viaTeam[login] = true
@@ -292,7 +305,7 @@ func (g *Graph) ForMember(login string, opts Options) (MemberView, bool) {
 	if !g.members[login] && !g.outside[login] {
 		return MemberView{}, false
 	}
-	v := MemberView{Login: login, Outside: g.outside[login], OrgWide: g.orgWide[login]}
+	v := MemberView{Login: login, Outside: g.outside[login], OrgWide: g.orgWide[login], Teams: g.tree.ownTeams(login)}
 	for repo, gs := range g.specific[login] {
 		r, known := g.repos[repo]
 		if known && r.Archived && !opts.IncludeArchived {
@@ -311,7 +324,7 @@ func (g *Graph) ForRepo(repo string) (RepoView, bool) {
 	if !ok {
 		return RepoView{}, false
 	}
-	v := RepoView{Repo: repo, Public: !r.Private, Archived: r.Archived}
+	v := RepoView{Repo: repo, Public: !r.Private, Archived: r.Archived, Teams: g.teamNodes(repo), Direct: g.directGrants(repo)}
 
 	// Org-wide grants, grouped by source: the base permission once for
 	// everyone, then each other source with who holds it.
