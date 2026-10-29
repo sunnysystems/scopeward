@@ -88,3 +88,57 @@ func TestHTML_FindingsLinkToAccess(t *testing.T) {
 		t.Error("archived repository is not rendered, so the finding must not link to it")
 	}
 }
+
+func TestBuildAccessHTML_Teams(t *testing.T) {
+	s := accessSnapshot()
+	s.Teams = append(s.Teams, model.Team{Slug: "payments", ParentSlug: "platform", Members: []string{"pat"},
+		RepoGrants: []model.TeamRepoGrant{{Repo: "infra", Permission: "maintain"}}})
+	s.Teams[0].Members = append(s.Teams[0].Members, "pat")
+	s.Members = append(s.Members, model.Member{Login: "pat", Role: "member"})
+	v := buildAccessHTML(s)
+
+	byName := map[string]accessRowView{}
+	for _, r := range v.Teams {
+		byName["team:"+r.Name] = r
+	}
+	for _, r := range append(v.Members, v.Repos...) {
+		byName[r.Name] = r
+	}
+	pay := byName["team:payments"]
+	if pay.Tag != "in platform" || pay.Summary != "1 member · 2 repositories" || pay.Anchor != "access-t-payments" {
+		t.Errorf("payments row = %+v", pay)
+	}
+	if len(pay.Lines) != 2 || pay.Lines[1].Path != "inherited from platform" {
+		t.Errorf("payments repositories = %+v", pay.Lines)
+	}
+	api := byName["api"]
+	if len(api.Teams) != 2 || api.Teams[1].Depth != 1 || api.Teams[1].About != "inherited · 1 member" || api.Teams[0].Members != "dev" {
+		t.Errorf("api team tree = %+v", api.Teams)
+	}
+	if len(api.Direct) != 1 || api.Direct[0].Subject != "vic (outside collaborator)" {
+		t.Errorf("api direct = %+v", api.Direct)
+	}
+	if pat := byName["pat"]; len(pat.Facts) == 0 || pat.Facts[0].Value != "platform → payments" {
+		t.Errorf("pat facts = %+v", pat.Facts)
+	}
+	if dev := byName["dev"]; dev.Summary != "2 repositories · up to admin" {
+		t.Errorf("dev summary = %q", dev.Summary)
+	}
+}
+
+// A finding about a team links to its row by the slug its URL ends in.
+func TestHTML_TeamFindingLinksToAccess(t *testing.T) {
+	findings := []model.Finding{{
+		CheckID: "teams.singleton", Title: "Platform Eng has one member", Severity: model.SevLow, Axis: model.AxisTeams,
+		Resource: model.ResourceRef{Type: "team", Name: "Platform Eng", URL: "https://github.com/orgs/acme/teams/platform"},
+	}}
+	var buf bytes.Buffer
+	if err := HTML(&buf, Audit{Snapshot: accessSnapshot(), Report: check.Report{Findings: findings}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`href="#access-t-platform"`, `id="access-t-platform"`, "By team"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("html missing %q", want)
+		}
+	}
+}
