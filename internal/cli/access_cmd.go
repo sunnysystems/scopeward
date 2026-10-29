@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -29,7 +30,8 @@ func newAccessCommand(opts *options) *cobra.Command {
 		Long: "Resolve effective repository access: org ownership, the base permission,\n" +
 			"organization roles, team grants through nested teams, and direct grants.\n\n" +
 			"  scopeward access --org acme member alice   what alice can reach, and how\n" +
-			"  scopeward access --org acme repo api       who can reach api, and why",
+			"  scopeward access --org acme repo api       who can reach api, and why\n" +
+			"  scopeward access --org acme team platform  who is in platform, and what it reaches",
 	}
 	cmd.PersistentFlags().BoolVar(&includeArchived, "include-archived", false, "list archived (read-only) repositories in a member's reach")
 
@@ -39,6 +41,14 @@ func newAccessCommand(opts *options) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAccess(cmd.Context(), cmd.OutOrStdout(), opts, accessQuery{member: args[0], includeArchived: includeArchived})
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "team <slug>",
+		Short: "A team's place, members, and every repository it reaches",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAccess(cmd.Context(), cmd.OutOrStdout(), opts, accessQuery{team: args[0], includeArchived: includeArchived})
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
@@ -53,8 +63,8 @@ func newAccessCommand(opts *options) *cobra.Command {
 }
 
 type accessQuery struct {
-	member, repo    string
-	includeArchived bool
+	member, repo, team string
+	includeArchived    bool
 }
 
 func runAccess(ctx context.Context, out io.Writer, opts *options, q accessQuery) error {
@@ -103,6 +113,13 @@ func runAccess(ctx context.Context, out io.Writer, opts *options, q accessQuery)
 	}
 
 	g := access.Build(snap)
+	if q.team != "" {
+		v, ok := g.ForTeam(q.team, access.Options{IncludeArchived: q.includeArchived})
+		if !ok {
+			return fmt.Errorf("no team %q in %s (teams are named by slug, e.g. %q)", q.team, opts.org, "platform-eng")
+		}
+		return renderAccessTeam(out, format, opts.org, v, g.Gaps(), q.includeArchived)
+	}
 	if q.repo != "" {
 		v, ok := g.ForRepo(q.repo)
 		if !ok {
@@ -144,6 +161,83 @@ type accessJSON struct {
 	Bot       bool        `json:"bot,omitempty"`
 }
 
+// --- team ---
+
+func renderAccessTeam(out io.Writer, format, org string, v access.TeamView, gaps []string, includeArchived bool) error {
+	switch format {
+	case "json":
+		repos := make([]map[string]any, 0, len(v.Repos))
+		for _, r := range v.Repos {
+			repos = append(repos, map[string]any{"repo": r.Repo, "level": r.Level.String(), "from": r.From, "inherited": r.From != v.Team})
+		}
+		return writeJSON(out, map[string]any{
+			"org": org, "team": v.Team, "name": v.Name,
+			"ancestors": nonNil(v.Ancestors), "children": nonNil(v.Children),
+			"members": nonNil(v.Members), "maintainers": nonNil(v.Maintainers),
+			"org_roles": grantsJSON(v.OrgRoles), "repositories": repos,
+			"archived_included": includeArchived, "not_assessed": nonNil(gaps), "scope": accessview.Scope,
+		})
+	case "markdown":
+		fmt.Fprintf(out, "# Access · %s · team %s\n\n", org, v.Team)
+		if len(v.Ancestors) > 0 {
+			fmt.Fprintf(out, "**Parent:** %s  \n", strings.Join(v.Ancestors, " → "))
+		}
+		if len(v.Children) > 0 {
+			fmt.Fprintf(out, "**Children:** %s  \n", strings.Join(v.Children, ", "))
+		}
+		fmt.Fprintf(out, "**Members (%d):** %s\n\n", len(v.Members), strings.Join(v.Members, ", "))
+		fmt.Fprintf(out, "| Repository | Level | From |\n|---|---|---|\n")
+		for _, r := range v.Repos {
+			from := "own grant"
+			if r.From != v.Team {
+				from = "inherited from " + r.From
+			}
+			fmt.Fprintf(out, "| %s | %s | %s |\n", r.Repo, r.Level, from)
+		}
+		fmt.Fprintln(out)
+		writeAccessFooterMarkdown(out, gaps)
+		return nil
+	}
+
+	fmt.Fprintln(out, ui.Title.Render("scopeward")+ui.Subtle.Render(" · access · "+org+" · team ")+ui.Accent.Render(v.Team))
+	fmt.Fprintln(out)
+	accessview.Team(out, v, gaps, accessview.MemberOptions{IncludeArchived: includeArchived, ArchivedHint: "pass --include-archived"})
+	return nil
+}
+
+func teamNodesJSON(ns []access.TeamNode) []map[string]any {
+	out := make([]map[string]any, 0, len(ns))
+	for _, n := range ns {
+		out = append(out, map[string]any{
+			"team": n.Team, "level": n.Level.String(), "inherited": n.Inherited,
+			"roster": n.Roster, "members": nonNil(n.Members), "children": teamNodesJSON(n.Children),
+		})
+	}
+	return out
+}
+
+func writeTeamNodesMarkdown(out io.Writer, ns []access.TeamNode, depth int) {
+	for _, n := range ns {
+		name := n.Team
+		if depth > 0 {
+			name = strings.Repeat("&nbsp;&nbsp;", depth-1) + "└ " + n.Team
+		}
+		level := n.Level.String()
+		if n.Inherited {
+			level += " (inherited)"
+		}
+		fmt.Fprintf(out, "| %s | %s | %d: %s |\n", name, level, n.Roster, strings.Join(n.Members, ", "))
+		writeTeamNodesMarkdown(out, n.Children, depth+1)
+	}
+}
+
+func nonNilChains(c [][]string) [][]string {
+	if c == nil {
+		return [][]string{}
+	}
+	return c
+}
+
 // nonNil keeps an empty list a list in JSON, so a consumer never has to tell
 // null from nothing.
 func nonNil(s []string) []string {
@@ -169,12 +263,15 @@ func renderAccessMember(out io.Writer, format, org string, v access.MemberView, 
 			repos = append(repos, accessJSON{Repo: a.Repo, Effective: a.Effective.String(), Grants: grantsJSON(a.Grants)})
 		}
 		return writeJSON(out, map[string]any{
-			"org": org, "member": v.Login, "outside_collaborator": v.Outside,
+			"org": org, "member": v.Login, "outside_collaborator": v.Outside, "teams": nonNilChains(v.Teams),
 			"every_repository": grantsJSON(v.OrgWide), "repositories": repos,
 			"archived_included": includeArchived, "not_assessed": nonNil(gaps), "scope": accessview.Scope,
 		})
 	case "markdown":
 		fmt.Fprintf(out, "# Access · %s · %s\n\n", org, v.Login)
+		if len(v.Teams) > 0 {
+			fmt.Fprintf(out, "**Teams:** %s\n\n", accessview.TeamChains(v.Teams))
+		}
 		if len(v.OrgWide) > 0 {
 			fmt.Fprintln(out, "**Every repository**")
 			fmt.Fprintln(out)
@@ -223,16 +320,33 @@ func renderAccessRepo(out io.Writer, format, org string, v access.RepoView, gaps
 		for _, a := range v.People {
 			people = append(people, accessJSON{Login: a.Login, Effective: a.Effective.String(), Grants: grantsJSON(a.Grants), Outside: a.Outside, Bot: a.Bot})
 		}
+		direct := make([]map[string]any, 0, len(v.Direct))
+		for _, d := range v.Direct {
+			direct = append(direct, map[string]any{"login": d.Login, "level": d.Level.String(), "outside_collaborator": d.Outside, "bot": d.Bot})
+		}
 		return writeJSON(out, map[string]any{
 			"org": org, "repo": v.Repo, "public": v.Public, "archived": v.Archived,
-			"org_wide": groups, "people": people, "not_assessed": nonNil(gaps), "scope": accessview.Scope,
+			"org_wide": groups, "teams": teamNodesJSON(v.Teams), "direct": direct, "people": people,
+			"not_assessed": nonNil(gaps), "scope": accessview.Scope,
 		})
 	case "markdown":
 		fmt.Fprintf(out, "# Access · %s/%s\n\n", org, v.Repo)
 		for _, note := range accessview.RepoNotes(v) {
 			fmt.Fprintf(out, "_%s_\n\n", note)
 		}
-		fmt.Fprintf(out, "| Who | Level | Through |\n|---|---|---|\n")
+		if len(v.Teams) > 0 {
+			fmt.Fprintf(out, "**Teams**\n\n| Team | Level | Members |\n|---|---|---|\n")
+			writeTeamNodesMarkdown(out, v.Teams, 0)
+			fmt.Fprintln(out)
+		}
+		if len(v.Direct) > 0 {
+			fmt.Fprintf(out, "**Direct grants**\n\n| Who | Level |\n|---|---|\n")
+			for _, d := range v.Direct {
+				fmt.Fprintf(out, "| %s | %s |\n", d.Login, d.Level)
+			}
+			fmt.Fprintln(out)
+		}
+		fmt.Fprintf(out, "**People**\n\n| Who | Level | Through |\n|---|---|---|\n")
 		for _, ow := range v.OrgWide {
 			fmt.Fprintf(out, "| %s | %s | %s |\n", accessview.OrgWideWho(ow, 1<<30), ow.Grant.Level, ow.Grant.Path())
 		}

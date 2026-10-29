@@ -127,3 +127,63 @@ func TestRenderAccess_Markdown(t *testing.T) {
 		t.Errorf("markdown:\n%s", buf.String())
 	}
 }
+
+// The repository view says why by team and by direct grant before it says who.
+func TestRenderAccessRepo_TeamsAndDirect(t *testing.T) {
+	plainOutput(t)
+	g := accessGraph()
+	v, _ := g.ForRepo("api")
+	var buf bytes.Buffer
+	_ = renderAccessRepo(&buf, "text", "acme", v, nil)
+	out := buf.String()
+	teams, direct, people := strings.Index(out, "Teams 1"), strings.Index(out, "Direct grants 1"), strings.Index(out, "People 3")
+	if teams < 0 || direct < teams || people < direct {
+		t.Fatalf("want Teams, then Direct grants, then People:\n%s", out)
+	}
+	for _, want := range []string{"write     platform", "2 members", "dev, olga", "write     vic  outside collaborator"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("repo text missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderAccessTeam(t *testing.T) {
+	plainOutput(t)
+	g := accessGraph()
+	v, ok := g.ForTeam("platform", access.Options{})
+	if !ok {
+		t.Fatal("platform unknown")
+	}
+	var buf bytes.Buffer
+	_ = renderAccessTeam(&buf, "text", "acme", v, nil, false)
+	out := buf.String()
+	for _, want := range []string{"scopeward · access · acme · team platform", "Parent       none", "Members 2", "dev, olga", "write     api"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("team text missing %q:\n%s", want, out)
+		}
+	}
+	buf.Reset()
+	_ = renderAccessTeam(&buf, "json", "acme", v, nil, false)
+	var doc struct {
+		Team  string `json:"team"`
+		Repos []struct {
+			Repo      string `json:"repo"`
+			Inherited bool   `json:"inherited"`
+		} `json:"repositories"`
+		Children []string `json:"children"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil || doc.Team != "platform" || len(doc.Repos) != 1 || doc.Repos[0].Inherited || doc.Children == nil {
+		t.Errorf("team json = %+v (%v)\n%s", doc, err, buf.String())
+	}
+}
+
+func TestRenderAccessMember_Teams(t *testing.T) {
+	plainOutput(t)
+	g := accessGraph()
+	v, _ := g.ForMember("dev", access.Options{})
+	var buf bytes.Buffer
+	_ = renderAccessMember(&buf, "text", "acme", v, nil, false)
+	if !strings.Contains(buf.String(), "Teams platform") {
+		t.Errorf("member text should list the person's teams:\n%s", buf.String())
+	}
+}

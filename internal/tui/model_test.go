@@ -152,7 +152,7 @@ func TestAccessTab(t *testing.T) {
 	}
 
 	m = press(m, "p")
-	if view := m.View(); !strings.Contains(view, "Repositories (2)") || !strings.Contains(view, "Repository-specific") {
+	if view := m.View(); !strings.Contains(view, "Repositories (2)") || !strings.Contains(view, "People") {
 		t.Errorf("pivot to repositories:\n%s", view)
 	}
 	// Archived repositories are hidden until asked for.
