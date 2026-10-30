@@ -89,6 +89,29 @@ func TestDuplicateRoster(t *testing.T) {
 			want: 0,
 		},
 		{
+			// #101: the shape freshly created squad teams have, since GitHub makes
+			// the creator a maintainer. teams.singleton already reports each one.
+			name: "one-person teams are not duplicates of each other",
+			teams: []model.Team{
+				func() model.Team {
+					x := team("Commerce", "", nil, "cart:push")
+					x.Maintainers = []string{"ana"}
+					return x
+				}(),
+				team("Finance", "", []string{"ana"}, "ledger:push"),
+				team("Platform", "", []string{"ana"}, "chassis:push"),
+			},
+			want: 0,
+		},
+		{
+			name: "two-person twins are still duplicates",
+			teams: []model.Team{
+				team("Platform", "", []string{"ana", "bo"}, "api:write"),
+				team("Infra", "", []string{"ana", "bo"}, "api:write"),
+			},
+			want: 1, sev: model.SevMedium,
+		},
+		{
 			name: "empty teams are not duplicates of each other",
 			teams: []model.Team{
 				team("Alpha", "", nil, "api:write"),
