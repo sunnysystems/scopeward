@@ -127,3 +127,53 @@ func TestMemberPrivilegeNotEvaluated(t *testing.T) {
 		t.Errorf("not reported as not-evaluated: %v", want)
 	}
 }
+
+// TestOutsideCollaboratorInviteGatedOnPlan pins #102: only Enterprise Cloud can
+// restrict outside-collaborator invitations, so on Free and Team the check is
+// not evaluated (an upgrade is not a remediation), while an Enterprise or an
+// unknown plan still reports.
+func TestOutsideCollaboratorInviteGatedOnPlan(t *testing.T) {
+	c := byID(t, "teams.members-can-invite-outside-collaborators")
+	cases := []struct {
+		plan        string
+		wantFinding bool
+	}{
+		{"free", false},
+		{"team", false},
+		{"enterprise", true},
+		{"", true}, // unseen plan: report as before, never withhold on a guess
+	}
+	for _, tc := range cases {
+		t.Run("plan="+tc.plan, func(t *testing.T) {
+			snap := model.NewSnapshot("acme")
+			snap.Coverage.OK(model.DataOrg, 1)
+			snap.Org.Plan = tc.plan
+			snap.Org.MembersCanInviteOutsideCollabs = bptr(true)
+			rep := check.Run(context.Background(), snap, []check.Check{c})
+			if got := len(rep.Findings) == 1; got != tc.wantFinding {
+				t.Fatalf("finding = %v, want %v", got, tc.wantFinding)
+			}
+			if !tc.wantFinding && (len(rep.Skipped) != 1 || !strings.Contains(rep.Skipped[0].Reason, "Enterprise Cloud")) {
+				t.Errorf("want not evaluated with the plan reason, got %+v", rep.Skipped)
+			}
+		})
+	}
+}
+
+// TestOutsideCollaboratorInviteCopy pins the two text fixes from #102: the UI
+// section's current name, and no claim that outside collaborators escape 2FA
+// enforcement (they are removed when they lack 2FA).
+func TestOutsideCollaboratorInviteCopy(t *testing.T) {
+	snap := model.NewSnapshot("acme")
+	snap.Org.MembersCanInviteOutsideCollabs = bptr(true)
+	got := byID(t, "teams.members-can-invite-outside-collaborators").Run(context.Background(), snap)
+	if len(got) != 1 {
+		t.Fatalf("want one finding, got %d", len(got))
+	}
+	if !strings.Contains(got[0].Remediation, "Repository outside collaborators") {
+		t.Errorf("remediation names a stale UI section: %q", got[0].Remediation)
+	}
+	if strings.Contains(got[0].Description, "2FA") {
+		t.Errorf("description must not claim outside collaborators escape 2FA: %q", got[0].Description)
+	}
+}
