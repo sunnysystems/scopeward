@@ -71,6 +71,9 @@ func Run(ctx context.Context, client *ghclient.Client, org string, prog Reporter
 	if err != nil {
 		return nil, fmt.Errorf("cannot read organization %q: %w", org, err)
 	}
+	if adminVisible && !opts.AccessOnly {
+		collectSecurityDefaults(ctx, client, org, snap)
+	}
 
 	// The axes touch disjoint snapshot fields and a thread-safe coverage report,
 	// so they collect concurrently.

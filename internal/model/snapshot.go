@@ -25,6 +25,33 @@ type Organization struct {
 	PushProtectionDefault          *bool `json:"push_protection_default,omitempty"`   // for new repos
 	DependabotAlertsDefault        *bool `json:"dependabot_alerts_default,omitempty"` // for new repos
 	WebCommitSignoffRequired       *bool `json:"web_commit_signoff_required,omitempty"`
+	// NewRepoSecurity is what a new repository gets from the org's default Code
+	// Security configurations, per visibility. nil when the org has none or the
+	// token cannot read them; the legacy *Default booleans above then stand.
+	NewRepoSecurity *NewRepoSecurity `json:"new_repo_security,omitempty"`
+}
+
+// NewRepoSecurity is the security a new repository is created with, split by
+// visibility because a default configuration can target public and private
+// repositories separately.
+type NewRepoSecurity struct {
+	Public  SecurityDefaults `json:"public"`
+	Private SecurityDefaults `json:"private"` // private and internal
+}
+
+// For returns the defaults for a visibility, "public" or "private".
+func (n NewRepoSecurity) For(visibility string) SecurityDefaults {
+	if visibility == "public" {
+		return n.Public
+	}
+	return n.Private
+}
+
+// SecurityDefaults are the settings a default configuration turns on.
+type SecurityDefaults struct {
+	DependabotAlerts bool `json:"dependabot_alerts"`
+	SecretScanning   bool `json:"secret_scanning"`
+	PushProtection   bool `json:"push_protection"`
 }
 
 // Runner is a self-hosted Actions runner registered at the org level.

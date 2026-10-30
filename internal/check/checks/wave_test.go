@@ -45,7 +45,7 @@ func TestOrgSettingsChecks(t *testing.T) {
 func TestOrgDefaultCheck(t *testing.T) {
 	snap := model.NewSnapshot("acme")
 	snap.Org.PushProtectionDefault = bptr(false) // disabled → flag
-	c := orgDefault{id: "x", sev: model.SevMedium, get: func(o model.Organization) *bool { return o.PushProtectionDefault }}
+	c := orgDefault{id: "x", sev: model.SevMedium, legacy: func(o model.Organization) *bool { return o.PushProtectionDefault }}
 	if got := c.Run(context.Background(), snap); len(got) != 1 {
 		t.Errorf("disabled default: want 1, got %d", len(got))
 	}
