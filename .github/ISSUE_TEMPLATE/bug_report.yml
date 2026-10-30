@@ -44,7 +44,7 @@ body:
     attributes:
       label: Version
       description: Output of `scopeward --version`.
-      placeholder: scopeward v0.4.0
+      placeholder: scopeward v0.4.1
     validations:
       required: true
 
