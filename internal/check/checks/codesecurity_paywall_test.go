@@ -62,6 +62,33 @@ func TestPushProtectionPaywall(t *testing.T) {
 	}
 }
 
+// TestPushProtectionRemediationMatchesEntitlement pins #96: only a confirmed
+// entitlement may tell the operator the fix is already paid for.
+func TestPushProtectionRemediationMatchesEntitlement(t *testing.T) {
+	const covered = "covered by the organization's GitHub Secret Protection entitlement"
+	cases := []struct {
+		name        string
+		state       model.EntitlementState
+		wantCovered bool
+	}{
+		{"granted says covered", model.EntitlementGranted, true},
+		{"unknown must not claim coverage", model.EntitlementUnknown, false},
+		{"unprobed must not claim coverage", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, f := range (repoNoPushProtection{}).Run(context.Background(), paywallSnapshot(tc.state)) {
+				if f.Evidence["private"] != true {
+					continue
+				}
+				if got := strings.Contains(f.Remediation, covered); got != tc.wantCovered {
+					t.Errorf("%s: claims coverage = %v, want %v: %q", f.Evidence["repo"], got, tc.wantCovered, f.Remediation)
+				}
+			}
+		})
+	}
+}
+
 // TestPushProtectionLimitation pins that suppression is always accounted for.
 // Dropping the private repos silently would report a clean bill of health for
 // repositories nothing looked at.

@@ -84,7 +84,7 @@ func (c repoNoPushProtection) Run(_ context.Context, s *model.Snapshot) []model.
 		remediation := "Enable secret-scanning push protection on this repository (and org-wide for new repos)."
 		if r.Private {
 			sev = model.SevMedium
-			remediation = "Enable push protection on this repo, and org-wide for new private repos. This is covered by the organization's GitHub Secret Protection entitlement."
+			remediation = privatePushProtectionRemediation(s.Entitlement(model.EntSecretProtection))
 		}
 
 		title := "Push protection is off on " + s.Org.Login + "/" + r.Name
@@ -108,4 +108,16 @@ func (c repoNoPushProtection) Run(_ context.Context, s *model.Snapshot) []model.
 		})
 	}
 	return out
+}
+
+// privatePushProtectionRemediation words the fix for a private repository by
+// what is actually known about the entitlement. Only a confirmed one may say the
+// fix is already paid for: telling an org it is covered when the probe could
+// not tell turns the next step into a surprise invoice or a failed API call
+// (#96). Absent never reaches here; those repos are withheld by paywalled.
+func privatePushProtectionRemediation(st model.EntitlementStatus) string {
+	if st.State == model.EntitlementGranted {
+		return "Enable push protection on this repo, and org-wide for new private repos. This is covered by the organization's GitHub Secret Protection entitlement (" + st.Reason + ")."
+	}
+	return "Enable push protection on this repo, and org-wide for new private repos. On a private repository this requires GitHub Secret Protection, which is billed per active committer; scopeward could not confirm whether this organization has it (" + st.Reason + "), so check before enabling."
 }

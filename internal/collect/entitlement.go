@@ -16,8 +16,9 @@ import (
 // Protection as a metered product independent of the plan tier, so a Team org
 // may hold it and an Enterprise org may not — gating on plan.name would suppress
 // findings the org can actually act on, which is the same false negative in a
-// different axis. Verified against a live Team-plan org whose private
-// repositories all have push protection enabled.
+// different axis. The evidence probe was verified against a live Team-plan org
+// whose private repositories all have push protection enabled, and the billing
+// probe against one that never bought it (see secretProtectionBilling).
 //
 // Two probes, cheapest first:
 //
@@ -42,8 +43,8 @@ func detectSecretProtection(ctx context.Context, client *ghclient.Client, org st
 	// No private repository proves it either way. That is the case where the
 	// entitlement genuinely decides whether hundreds of findings are actionable,
 	// so it is worth one request to answer it.
-	seats, err := fetchSecretProtectionSeats(ctx, client, org)
-	snap.SetEntitlement(secretProtectionFromSeats(seats, err))
+	billing, err := fetchSecretProtectionBilling(ctx, client, org)
+	snap.SetEntitlement(secretProtectionFromBilling(billing, err))
 }
 
 // secretProtectionFromEvidence answers from repository state alone, or returns
@@ -71,10 +72,31 @@ func secretProtectionFromEvidence(snap *model.Snapshot) *model.EntitlementStatus
 	}
 }
 
-// secretProtectionFromSeats interprets the billing probe. A failed probe is
+// secretProtectionBilling is what the billing endpoint reports for the product.
+//
+// Only three of its numbers are evidence. maximum_advanced_security_committers
+// is deliberately not among them: it is the count of committers who *would*
+// consume the product if it were enabled on every repository, not a purchase.
+// Observed on a live Team-plan org that had never bought Secret Protection, the
+// endpoint answered maximum=1 (its one active committer), total=0, no
+// repositories and no purchased count; reading maximum as seats marked that org
+// entitled and let every private repository through the #50 gate (#96).
+type secretProtectionBilling struct {
+	Purchased    int // seats bought up front; absent under metered billing
+	InUse        int // distinct committers consuming it today
+	Repositories int // repositories consuming it today
+	Maximum      int // would-be consumption if enabled everywhere; never evidence
+}
+
+// secretProtectionFromBilling interprets the billing probe. A failed probe is
 // Unknown, never Absent: Absent suppresses findings, and a 403 from a token
 // without admin:org would otherwise silently hide real exposure.
-func secretProtectionFromSeats(seats int, err error) model.EntitlementStatus {
+//
+// A probe that answers with nothing purchased and nothing in use is Absent,
+// including for an org on metered billing that could turn the product on at
+// will. Turning it on is the purchase, so the remediation is still an invoice,
+// which is the case #50 withholds.
+func secretProtectionFromBilling(b secretProtectionBilling, err error) model.EntitlementStatus {
 	switch {
 	case err != nil:
 		return model.EntitlementStatus{
@@ -82,38 +104,47 @@ func secretProtectionFromSeats(seats int, err error) model.EntitlementStatus {
 			State:       model.EntitlementUnknown,
 			Reason:      reasonFor(err, "reading GitHub Secret Protection billing"),
 		}
-	case seats > 0:
+	case b.Purchased > 0:
 		return model.EntitlementStatus{
 			Entitlement: model.EntSecretProtection,
 			State:       model.EntitlementGranted,
-			Reason:      fmt.Sprintf("%d GitHub Secret Protection seat(s) provisioned", seats),
+			Reason:      fmt.Sprintf("%d GitHub Secret Protection seat(s) purchased", b.Purchased),
+		}
+	case b.InUse > 0 || b.Repositories > 0:
+		return model.EntitlementStatus{
+			Entitlement: model.EntSecretProtection,
+			State:       model.EntitlementGranted,
+			Reason: fmt.Sprintf("GitHub Secret Protection is in use: %d committer(s) across %d repository(ies)",
+				b.InUse, b.Repositories),
 		}
 	default:
 		return model.EntitlementStatus{
 			Entitlement: model.EntSecretProtection,
 			State:       model.EntitlementAbsent,
-			Reason:      "no GitHub Secret Protection seats are provisioned for this organization",
+			Reason: fmt.Sprintf("billing reports no GitHub Secret Protection purchased or in use "+
+				"(enabling it would bill %d active committer(s))", b.Maximum),
 		}
 	}
 }
 
-// fetchSecretProtectionSeats returns how many Secret Protection committer seats
-// the org has available. The endpoint is shared with Code Security and requires
-// the product to be named, which is why the query parameter is not optional.
-func fetchSecretProtectionSeats(ctx context.Context, client *ghclient.Client, org string) (int, error) {
+// fetchSecretProtectionBilling reads the org's Secret Protection usage. The
+// endpoint is shared with Code Security and requires the product to be named,
+// which is why the query parameter is not optional.
+func fetchSecretProtectionBilling(ctx context.Context, client *ghclient.Client, org string) (secretProtectionBilling, error) {
 	var dto struct {
-		MaximumCommitters int `json:"maximum_advanced_security_committers"`
-		TotalCommitters   int `json:"total_advanced_security_committers"`
+		Purchased    int        `json:"purchased_advanced_security_committers"`
+		Total        int        `json:"total_advanced_security_committers"`
+		Maximum      int        `json:"maximum_advanced_security_committers"`
+		Repositories []struct{} `json:"repositories"`
 	}
 	q := url.Values{"advanced_security_product": {"secret_protection"}}
 	if _, err := client.Get(ctx, "/orgs/"+org+"/settings/billing/advanced-security", q, &dto); err != nil {
-		return 0, err
+		return secretProtectionBilling{}, err
 	}
-	// Either number being positive means the product is provisioned: maximum is
-	// what was purchased, total is what is in use. They can disagree while a
-	// purchase is being drawn down, and one of them being zero is not evidence.
-	if dto.MaximumCommitters > dto.TotalCommitters {
-		return dto.MaximumCommitters, nil
-	}
-	return dto.TotalCommitters, nil
+	return secretProtectionBilling{
+		Purchased:    dto.Purchased,
+		InUse:        dto.Total,
+		Repositories: len(dto.Repositories),
+		Maximum:      dto.Maximum,
+	}, nil
 }

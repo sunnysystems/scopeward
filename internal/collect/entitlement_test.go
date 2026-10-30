@@ -70,24 +70,30 @@ func TestSecretProtectionFromEvidence(t *testing.T) {
 	}
 }
 
-// TestSecretProtectionFromSeats pins the billing probe, and in particular that a
-// failed probe never reads as Absent — Absent suppresses findings, so a token
+// TestSecretProtectionFromBilling pins the billing probe, and in particular that
+// a failed probe never reads as Absent — Absent suppresses findings, so a token
 // without admin:org would otherwise silently hide real exposure.
-func TestSecretProtectionFromSeats(t *testing.T) {
+func TestSecretProtectionFromBilling(t *testing.T) {
+	type billing = secretProtectionBilling
 	cases := []struct {
-		name  string
-		seats int
-		err   error
-		want  model.EntitlementState
+		name string
+		b    billing
+		err  error
+		want model.EntitlementState
 	}{
-		{"seats provisioned", 5, nil, model.EntitlementGranted},
-		{"no seats", 0, nil, model.EntitlementAbsent},
-		{"probe failed", 0, errors.New("403 forbidden"), model.EntitlementUnknown},
-		{"probe failed with a stale count", 5, errors.New("boom"), model.EntitlementUnknown},
+		{"seats purchased", billing{Purchased: 5}, nil, model.EntitlementGranted},
+		{"in use on metered billing", billing{InUse: 3, Repositories: 2, Maximum: 3}, nil, model.EntitlementGranted},
+		{"a repository consuming it is enough", billing{Repositories: 1}, nil, model.EntitlementGranted},
+		// #96: the shape a live Team org returned having never bought the product.
+		// maximum is would-be consumption, so it must not read as a purchase.
+		{"maximum alone is not a purchase", billing{Maximum: 1}, nil, model.EntitlementAbsent},
+		{"nothing at all", billing{}, nil, model.EntitlementAbsent},
+		{"probe failed", billing{}, errors.New("403 forbidden"), model.EntitlementUnknown},
+		{"probe failed with a stale count", billing{Purchased: 5}, errors.New("boom"), model.EntitlementUnknown},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := secretProtectionFromSeats(tc.seats, tc.err)
+			got := secretProtectionFromBilling(tc.b, tc.err)
 			if got.State != tc.want {
 				t.Errorf("state = %s, want %s", got.State, tc.want)
 			}
