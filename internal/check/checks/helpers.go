@@ -8,9 +8,11 @@
 package checks
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/sunnysystems/scopeward/internal/access"
 	"github.com/sunnysystems/scopeward/internal/model"
 )
 
@@ -107,20 +109,66 @@ func teamRef(org string, t model.Team) model.ResourceRef {
 	}
 }
 
-// reviewExpected reports whether requiring a second-person PR approval is viable:
-// it needs at least two members and must not be overridden by --solo. With fewer
-// members (a solo account, --me/--user mode, or a one-person org), or with --solo
-// set, requiring an approval would lock the branch, since GitHub forbids
-// approving your own pull request.
-func reviewExpected(s *model.Snapshot) bool {
-	return !s.Solo && len(s.Members) >= 2
+// reviewBench sizes branch-protection advice by who could review a change to a
+// repository: the people who can push to it, by any path, from the access
+// graph (access.Graph.Writers).
+//
+// It used to be the org's member count. That read a 10-member org where base
+// permission is read and only the three owners can push (one of whom does all
+// the work) as big enough to require an approval with no admin bypass, which
+// is a lockout for the one active developer: the #37 failure, reached through
+// a different door (#99). Who is in the org says nothing about who can review;
+// who can push does.
+//
+// When the graph has gaps (a --quick run, unreadable teams or collaborators) or
+// the provider has no per-repository access yet, the bench falls back to the
+// member count and records why. Undercounting writers would suggest no review
+// at all, which is the worse error.
+type reviewBench struct {
+	s     *model.Snapshot
+	graph *access.Graph // nil when falling back to members
+	why   string        // why it fell back; empty when using the graph
 }
 
-// breakGlassThreshold is the member count below which scopeward stops asking an
+func newReviewBench(s *model.Snapshot) reviewBench {
+	if s.Provider == model.ProviderGitLab {
+		return reviewBench{s: s, why: "repository access is not resolved on GitLab yet"}
+	}
+	g := access.Build(s)
+	if gaps := g.Gaps(); len(gaps) > 0 {
+		return reviewBench{s: s, why: gaps[0]}
+	}
+	return reviewBench{s: s, graph: g}
+}
+
+// benchSize is the bench for one repository and what it was measured from.
+type benchSize struct {
+	n        int
+	writers  bool   // measured from people who can push, not org members
+	fallback string // why it is the member count, when it is
+	solo     bool
+}
+
+func (b reviewBench) of(repo string) benchSize {
+	if b.graph == nil {
+		return benchSize{n: len(b.s.Members), fallback: b.why, solo: b.s.Solo}
+	}
+	return benchSize{n: len(b.graph.Writers(repo)), writers: true, solo: b.s.Solo}
+}
+
+// reviewExpected reports whether requiring a second-person PR approval is
+// viable: it needs at least two people who could review, and must not be
+// overridden by --solo. With fewer, requiring an approval would lock the
+// branch, since GitHub forbids approving your own pull request.
+func (z benchSize) reviewExpected() bool {
+	return !z.solo && z.n >= 2
+}
+
+// breakGlassThreshold is the bench size below which scopeward stops asking an
 // organization to give up its administrator bypass on protected branches.
 //
 // The number is a judgement call, not a standard. Requiring an approving review
-// means every change waits on one of the other N-1 members; removing the admin
+// means every change waits on one of the other N-1 people; removing the admin
 // bypass on top of that means there is no path at all when nobody is available.
 // Below roughly five people that pool is thin enough that one holiday or one
 // timezone blocks a production fix, and the observed outcome is not a stricter
@@ -129,23 +177,49 @@ const breakGlassThreshold = 5
 
 // adminBypassExpected reports whether keeping an administrator bypass
 // (enforce_admins off) is the configuration scopeward should recommend for this
-// organization: protection that binds everyone day to day, with owners retaining
+// repository: protection that binds everyone day to day, with owners retaining
 // a documented emergency path.
 //
-// Deliberately inferred rather than flagged. A small org that does want strict
+// Deliberately inferred rather than flagged. A small team that does want strict
 // enforcement simply sets it and is never flagged, since the bypass check only
-// fires when the bypass exists; a larger org that wants a break-glass path
+// fires when the bypass exists; a larger one that wants a break-glass path
 // accepts that one finding in .scopeward.yml, where the reason is now recorded
 // and reported. Both directions are covered without another flag to learn.
 //
-// Member count only, deliberately not --solo. That flag means "do not suggest a
+// Bench size only, deliberately not --solo. That flag means "do not suggest a
 // fix requiring a second approver", which is about the suggested command; letting
 // it also decide a finding's severity would let a flag silently move the score,
 // which is the invisible-discount problem ignore rules were made visible to
-// avoid. A genuine single-developer account has fewer members than the threshold
+// avoid. A genuine single-developer repository has a bench below the threshold
 // anyway, so the honest signal already covers the case the flag was named for.
-func adminBypassExpected(s *model.Snapshot) bool {
-	return len(s.Members) < breakGlassThreshold
+func (z benchSize) adminBypassExpected() bool {
+	return z.n < breakGlassThreshold
+}
+
+// people describes the bench in a sentence, e.g. "3 people who can push to
+// this repository" or "10 organization members".
+func (z benchSize) people() string {
+	if z.writers {
+		noun := "people who can push"
+		if z.n == 1 {
+			noun = "person who can push"
+		}
+		return fmt.Sprintf("%d %s to this repository", z.n, noun)
+	}
+	return fmt.Sprintf("%d organization member(s)", z.n)
+}
+
+// evidence records what the advice was sized on, so the reasoning stays
+// visible in the report and the JSON.
+func (z benchSize) evidence(ev map[string]any) map[string]any {
+	ev["review_bench"] = z.n
+	if z.writers {
+		ev["review_bench_source"] = "people who can push"
+	} else {
+		ev["review_bench_source"] = "organization members"
+		ev["review_bench_fallback"] = z.fallback
+	}
+	return ev
 }
 
 // withFix sets a finding's suggested-fix command and its verification command

@@ -34,13 +34,15 @@ func (mrApprovalBypassable) Meta() check.CheckMeta {
 }
 
 func (c mrApprovalBypassable) Run(_ context.Context, s *model.Snapshot) []model.Finding {
-	// Approval bypass only matters when review is actually expected; a solo or
-	// <2-member group cannot get a second approver anyway.
-	if !reviewExpected(s) {
-		return nil
-	}
+	// Approval bypass only matters when review is actually expected; a solo
+	// project, or one with fewer than two people who can push, cannot get a
+	// second approver anyway.
+	bench := newReviewBench(s)
 	var out []model.Finding
 	for _, r := range activeRepos(s) {
+		if !bench.of(r.Name).reviewExpected() {
+			continue
+		}
 		var weaknesses []string
 		if r.MRAuthorCanApprove != nil && *r.MRAuthorCanApprove {
 			weaknesses = append(weaknesses, "author can approve their own MR")

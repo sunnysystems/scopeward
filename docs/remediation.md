@@ -32,14 +32,23 @@ and under `--quiet`. It is advisory: it never changes the exit code.
 ## Branch protection is scaled to your team
 
 A remediation nobody can live with is a remediation nobody applies, so the
-suggested branch-protection command adapts to the organization's size — no flag
-required:
+suggested branch-protection command adapts to the number of people who could
+review a change to each repository — no flag required:
 
-| Members | Suggested protection |
+| People who can push to the repository | Suggested protection |
 |---|---|
 | 1 | pull request required, no approving review, admin bypass kept |
 | 2–4 | pull request + 1 approving review, admin bypass kept |
 | 5+ | pull request + 1 approving review, enforced on admins too |
+
+The count is per repository and comes from the same access graph as
+`scopeward access`: owners, the base permission, organization roles, team and
+direct grants, outside collaborators included and bots excluded. Organization
+size is the wrong measure: a ten-member org whose base permission is `read`,
+where only three owners can push, has a bench of three, not ten. When access
+could not be fully resolved (a `--quick` run, unreadable teams or
+collaborators), the member count is used instead, and the finding's evidence
+says so.
 
 Below five people, requiring a review *and* removing the admin bypass leaves a
 team with no way to land an urgent fix when one person is away. So `scopeward`
@@ -50,8 +59,8 @@ than recommending a lockout and then flagging you for the workaround.
 `--solo` affects only the *approving review* column: it never changes a
 finding's severity. A flag that moved the score would be an invisible discount,
 which is exactly what `.scopeward.yml` reasons exist to prevent. Whether the
-admin bypass is expected is decided by member count alone — and a genuine solo
-account is below the threshold anyway.
+admin bypass is expected is decided by the count of people who can push alone
+— and a genuine solo account is below the threshold anyway.
 
 Above the threshold, an admin bypass becomes a `medium` finding
 (`teams.branch-protection-bypassable`). If you keep one deliberately, accept it
