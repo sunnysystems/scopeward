@@ -62,6 +62,26 @@ func TestOwnerSprawl_TinyOrgNotFlagged(t *testing.T) {
 	}
 }
 
+// TestOwnerSprawl_FloorOfTwo pins #98: GitHub recommends at least two owners,
+// so the ratio rule must never flag two, even where 10% of the org is less.
+func TestOwnerSprawl_FloorOfTwo(t *testing.T) {
+	for _, members := range []int{10, 15, 19} {
+		snap := model.NewSnapshot("acme")
+		snap.Members = make([]model.Member, members)
+		for i := range snap.Members {
+			snap.Members[i] = model.Member{Role: "member"}
+		}
+		snap.Members[0].Role, snap.Members[1].Role = "admin", "admin"
+		if got := (ownerSprawl{}).Run(context.Background(), snap); len(got) != 0 {
+			t.Errorf("%d members, 2 owners: findings = %d, want 0", members, len(got))
+		}
+		snap.Members[2].Role = "admin"
+		if got := (ownerSprawl{}).Run(context.Background(), snap); len(got) != 1 {
+			t.Errorf("%d members, 3 owners: findings = %d, want 1 (ratio still applies above the floor)", members, len(got))
+		}
+	}
+}
+
 func TestOwnerSprawl_WithinBounds(t *testing.T) {
 	snap := model.NewSnapshot("acme")
 	snap.Members = make([]model.Member, 100)

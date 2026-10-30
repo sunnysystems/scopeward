@@ -19,6 +19,12 @@ const (
 	// ownerRatioMinMembers stops the ratio rule from flagging tiny orgs, where a
 	// couple of owners is expected (e.g. 2 owners on a 3-person team).
 	ownerRatioMinMembers = 10
+	// ownerFloor is the owner count the ratio rule never pushes below. GitHub
+	// recommends "at least two people within each organization have the owner
+	// role", so a lone owner is a continuity risk, not the goal. Without the
+	// floor, 10% of a 10–19 member org is under two, and every such org with the
+	// recommended two owners was flagged (#98).
+	ownerFloor = 2
 	// ownerTitleCap is how many owner logins to name inline before summarizing.
 	ownerTitleCap = 10
 )
@@ -48,7 +54,7 @@ func (c ownerSprawl) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	}
 
 	overCount := n > ownerCountThreshold
-	overRatio := total >= ownerRatioMinMembers && float64(n)/float64(total) > ownerRatioThreshold
+	overRatio := total >= ownerRatioMinMembers && n > ownerFloor && float64(n)/float64(total) > ownerRatioThreshold
 	if !overCount && !overRatio {
 		return nil
 	}
@@ -66,7 +72,7 @@ func (c ownerSprawl) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 		Resource:    orgRef(s.Org),
 		Evidence:    map[string]any{"owner_count": n, "member_count": total, "owners": logins},
 		Description: "Owners have unrestricted control of the organization. A large owner set increases the chance that one compromised or careless account can damage every repository and setting.",
-		Remediation: "Reduce owners to the minimum that operations require; move others to the least privilege they actually need.",
+		Remediation: "Reduce owners to the minimum that operations require, but keep at least two so the organization is never one departure or one lost 2FA device away from having no owner; move others to the least privilege they actually need.",
 		DocsURL:     "https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/roles-in-an-organization",
 	}}
 }
