@@ -55,12 +55,14 @@ func init() {
 		get:   func(o model.Organization) *bool { return o.MembersCanInviteOutsideCollabs },
 		desc: "Any member with admin on a repository can grant an account outside the " +
 			"organization access to a private repository, without owner review. Outside " +
-			"collaborators are not covered by org-wide 2FA enforcement or SAML SSO, so each " +
-			"one is an access path the org's identity controls do not reach. This reports the " +
-			"door; human.outside-collaborator reports who already walked through it.",
-		remediation: "In Settings → Member privileges → Repository invitations, restrict " +
-			"outside-collaborator invitations to organization owners.",
-		docs: "https://docs.github.com/organizations/managing-organization-settings/setting-permissions-for-adding-outside-collaborators",
+			"collaborators are not covered by SAML SSO, so each one is an access path the " +
+			"org's single sign-on does not reach. This reports the door; " +
+			"human.outside-collaborator reports who already walked through it.",
+		remediation: "In Settings → Member privileges → Repository outside collaborators, clear " +
+			"\"Allow repository administrators to invite outside collaborators to repositories " +
+			"for this organization\", so only organization owners can invite them.",
+		docs:           "https://docs.github.com/organizations/managing-organization-settings/setting-permissions-for-adding-outside-collaborators",
+		enterpriseOnly: true,
 	})
 }
 
@@ -85,6 +87,37 @@ type memberPrivilege struct {
 	id, title, short, desc, remediation, docs, field string
 	sev                                              model.Severity
 	get                                              func(model.Organization) *bool
+	// enterpriseOnly marks a setting only GitHub Enterprise Cloud can change. On
+	// a plan known not to be Enterprise, the finding's only remediation is an
+	// upgrade, which #50 withholds and Limitation reports (#102).
+	enterpriseOnly bool
+}
+
+// nonEnterprisePlans are the plan names known not to be GitHub Enterprise Cloud.
+// An allowlist rather than "anything but enterprise", so an unrecognized or
+// unseen plan reports as before instead of being withheld on a guess.
+var nonEnterprisePlans = map[string]bool{"free": true, "team": true}
+
+// withheld reports whether this org's plan cannot change the setting at all.
+func (c memberPrivilege) withheld(s *model.Snapshot) bool {
+	return c.enterpriseOnly && nonEnterprisePlans[s.Org.Plan]
+}
+
+// Limitation accounts for a setting the plan cannot change, so it reads as not
+// evaluated, with the reason and what to do instead, rather than as a pass.
+func (c memberPrivilege) Limitation(s *model.Snapshot) *check.Limitation {
+	if !c.withheld(s) {
+		return nil
+	}
+	return &check.Limitation{
+		CheckID: c.id,
+		Title:   c.title,
+		Axis:    model.AxisTeams,
+		Reason: "only GitHub Enterprise Cloud can restrict this, and this organization is on the " + s.Org.Plan +
+			" plan. Repository admins can always invite outside collaborators here, so keep team grants at write or maintain and the set of repository admins small",
+		Assessed: 0,
+		Omitted:  1,
+	}
 }
 
 // noAPIRoute is appended to every memberPrivilege remediation. Stated once here
@@ -106,6 +139,9 @@ func (c memberPrivilege) Meta() check.CheckMeta {
 }
 
 func (c memberPrivilege) Run(_ context.Context, s *model.Snapshot) []model.Finding {
+	if c.withheld(s) {
+		return nil // the plan cannot change it; Limitation says why
+	}
 	v := c.get(s.Org)
 	if v == nil || !*v { // not visible, or the privilege is not granted
 		return nil
