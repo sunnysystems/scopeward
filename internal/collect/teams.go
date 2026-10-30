@@ -88,14 +88,37 @@ func collectTeamsAndPermissions(ctx context.Context, client *ghclient.Client, or
 // perTeamKinds are the DataKinds produced only by the per-team detail pass.
 var perTeamKinds = []model.DataKind{model.DataTeamMembers, model.DataTeamRepos}
 
+// markNoTeams records the per-team data for an org that listed zero teams.
+//
+// Reporting that as "teams could not be listed" skipped every check needing team
+// data, including repo-no-owning-team, on exactly the org with the least team
+// structure (#97). But an empty list is a complete answer only for a token that
+// sees every team: secret teams are visible to owners and their own members
+// alone. Owner-level visibility of the org is the proof, so without it the gap
+// stays a gap, with a reason that says what was not seen.
+func markNoTeams(snap *model.Snapshot) {
+	if c, ok := snap.Coverage.Get(model.DataOrg); ok && c.Status == model.CoverageOK {
+		snap.Coverage.OK(model.DataTeamMembers, 0)
+		snap.Coverage.OK(model.DataTeamRepos, 0)
+		return
+	}
+	const reason = "no teams are visible to this token, and secret teams are visible only to owners and their members"
+	snap.Coverage.Missing(model.DataTeamMembers, reason)
+	snap.Coverage.Missing(model.DataTeamRepos, reason)
+}
+
 // collectTeamDetails fills each team's members, maintainers, and repo grants in
 // a single bounded-concurrency pass. Each goroutine writes a distinct slice
 // element, so the team data needs no locking. Skipped entirely if teams could
 // not be listed.
 func collectTeamDetails(ctx context.Context, client *ghclient.Client, org string, snap *model.Snapshot) {
-	if !snap.Coverage.Available(model.DataTeams) || len(snap.Teams) == 0 {
+	if !snap.Coverage.Available(model.DataTeams) {
 		snap.Coverage.Missing(model.DataTeamMembers, "teams could not be listed")
 		snap.Coverage.Missing(model.DataTeamRepos, "teams could not be listed")
+		return
+	}
+	if len(snap.Teams) == 0 {
+		markNoTeams(snap)
 		return
 	}
 
