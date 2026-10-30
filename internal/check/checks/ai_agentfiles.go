@@ -37,6 +37,7 @@ func (agentInstructionsUnowned) Meta() check.CheckMeta {
 }
 
 func (c agentInstructionsUnowned) Run(_ context.Context, s *model.Snapshot) []model.Finding {
+	bench := newReviewBench(s)
 	var out []model.Finding
 	for _, r := range activeRepos(s) {
 		if r.CodeownersPresent == nil || !*r.CodeownersPresent || len(r.AgentControlFiles) == 0 {
@@ -46,8 +47,9 @@ func (c agentInstructionsUnowned) Run(_ context.Context, s *model.Snapshot) []mo
 		// reviews pull requests, but any reviewer can approve a change to what the
 		// agents do. Where no review is required at all, that is
 		// teams.weak-branch-protection's finding, not a second one here; and with
-		// --solo nobody can approve their own pull request, so it is not the fix.
-		advisoryOnly := reviewExpected(s) &&
+		// --solo, or nobody else who can push, nobody can approve their own pull
+		// request, so it is not the fix.
+		advisoryOnly := bench.of(r.Name).reviewExpected() &&
 			r.BranchReqPRReview != nil && *r.BranchReqPRReview &&
 			r.CodeOwnerApprovalRequired != nil && !*r.CodeOwnerApprovalRequired
 		var unowned, advisory []string

@@ -358,6 +358,28 @@ func (g *Graph) ForRepo(repo string) (RepoView, bool) {
 	return v, true
 }
 
+// Writers lists the people who can push to a repository: members and outside
+// collaborators whose effective level there is write or above, by any path
+// (ownership, base permission, organization role, team or direct grant). Bots
+// are left out. They can push, but they cannot review, and this is the count of
+// who could review a change.
+//
+// It is only as complete as the graph: check Gaps before trusting a small number.
+func (g *Graph) Writers(repo string) []string {
+	set := map[string]bool{}
+	for login, ow := range g.orgWide {
+		if !g.bots[login] && len(ow) > 0 && ow[0].Level >= Write {
+			set[login] = true
+		}
+	}
+	for login, byRepo := range g.specific {
+		if gs, ok := byRepo[repo]; ok && !g.bots[login] && g.access(login, repo, gs).Effective >= Write {
+			set[login] = true
+		}
+	}
+	return sortedKeys(set)
+}
+
 func (g *Graph) access(login, repo string, gs []Grant) Access {
 	a := Access{Login: login, Repo: repo, Grants: gs, Outside: g.outside[login], Bot: g.bots[login]}
 	a.Effective = a.TopSpecific()

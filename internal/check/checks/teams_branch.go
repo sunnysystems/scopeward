@@ -36,12 +36,14 @@ const (
 
 func (c unprotectedDefaultBranch) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	gitlab := s.Provider == model.ProviderGitLab
+	bench := newReviewBench(s)
 	var out []model.Finding
 	for _, r := range activeRepos(s) {
 		if r.DefaultBranchProtected == nil || *r.DefaultBranchProtected {
 			continue // unknown or protected
 		}
-		remediation := branchRemediation(s, r.Private, s.Org.Plan)
+		z := bench.of(r.Name)
+		remediation := branchRemediation(z, r.Private, s.Org.Plan)
 		docs := "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets"
 		if gitlab {
 			remediation, docs = glBranchRemediation, glBranchDocs
@@ -52,12 +54,12 @@ func (c unprotectedDefaultBranch) Run(_ context.Context, s *model.Snapshot) []mo
 			Severity: model.SevHigh,
 			Axis:     model.AxisTeams,
 			Resource: repoResource(s, r),
-			Evidence: map[string]any{
+			Evidence: z.evidence(map[string]any{
 				"repo":           r.Name,
 				"default_branch": r.DefaultBranch,
 				"private":        r.Private,
 				"org_plan":       s.Org.Plan,
-			},
+			}),
 			Description: "Anyone with write access can push (or force-push) directly to this branch with no pull request, review, or status check. That removes the main guardrail against mistakes and malicious or AI-agent commits reaching production code.",
 			Remediation: remediation,
 			DocsURL:     docs,
@@ -66,7 +68,7 @@ func (c unprotectedDefaultBranch) Run(_ context.Context, s *model.Snapshot) []mo
 		// (free for public repos, GitHub Team+ for private). GitLab: protectable on
 		// any tier, but the glab command is deferred to the fixer abstraction (#10).
 		if !gitlab && branchProtectable(r.Private, s.Org.Plan) {
-			f = withFix(f, ghProtectBranch(s.Org.Login, r.Name, r.DefaultBranch, reviewExpected(s), !adminBypassExpected(s)))
+			f = withFix(f, ghProtectBranch(s.Org.Login, r.Name, r.DefaultBranch, z.reviewExpected(), !z.adminBypassExpected()))
 		}
 		out = append(out, f)
 	}
@@ -81,25 +83,25 @@ func branchProtectable(private bool, plan string) bool {
 
 // branchRemediation tailors the advice to whether protecting this branch is even
 // possible on the org's plan (branch protection / rulesets are free for public
-// repos but require GitHub Team+ for private repos), and to whether the
-// organization is large enough to live with the strict configuration.
+// repos but require GitHub Team+ for private repos), and to whether the people
+// who can push to it are enough to live with the strict configuration.
 //
 // It states the operational consequence rather than only the setting. "Require an
 // approving review" does not convey "nobody, including you, can merge alone from
 // now on", and an operator who discovers that at 2am reverts the protection
 // instead of adjusting it.
-func branchRemediation(s *model.Snapshot, private bool, plan string) string {
+func branchRemediation(z benchSize, private bool, plan string) string {
 	protect := "Protect the default branch with a ruleset (or branch protection): require a pull request and review, block force-pushes and deletion, and require status checks."
 	switch {
-	case adminBypassExpected(s) && reviewExpected(s):
+	case z.adminBypassExpected() && z.reviewExpected():
 		protect = "Protect the default branch with a ruleset (or branch protection): require a pull request with one approving review, and block force-pushes and deletion. " +
-			"For a team this size the suggested command leaves the admin bypass in place (enforce_admins off), so an owner can still land an urgent fix when nobody is available to review — the protection binds day-to-day work without becoming a lockout. " +
+			"With " + z.people() + ", the suggested command leaves the admin bypass in place (enforce_admins off), so an owner can still land an urgent fix when nobody is available to review — the protection binds day-to-day work without becoming a lockout. " +
 			"Turn the bypass off once the team is large enough that a reviewer is always reachable."
-	case adminBypassExpected(s):
+	case z.adminBypassExpected():
 		protect = "Protect the default branch with a ruleset (or branch protection): require a pull request, and block force-pushes and deletion. " +
 			"The suggested command does not require an approving review (you cannot approve your own pull request) and leaves the admin bypass in place, so the branch stays workable for a single developer while still blocking accidental direct pushes and history rewrites."
-	case reviewExpected(s):
-		protect += " Note that requiring a review and enforcing it on administrators means no one, including owners, can merge alone from then on — make sure enough reviewers are reachable before applying it."
+	case z.reviewExpected():
+		protect += " Note that requiring a review and enforcing it on administrators means no one, including owners, can merge alone from then on. This is suggested because " + z.people() + " is enough of a bench; make sure enough reviewers are reachable before applying it."
 	}
 	if !private {
 		return protect

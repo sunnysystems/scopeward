@@ -269,3 +269,29 @@ func TestParseLevel(t *testing.T) {
 		}
 	}
 }
+
+// TestWriters pins who counts as able to push: every path to write or above,
+// outside collaborators included, bots excluded (#99).
+func TestWriters(t *testing.T) {
+	g := Build(org())
+	cases := map[string][]string{
+		// owner, org-role holders, team members, the outside collaborator; not the bot.
+		"api": {"carl", "dev", "erin", "olga", "pat", "vic"},
+		// pat reaches it through the child team's admin grant.
+		"billing": {"carl", "erin", "olga", "pat"},
+		// nothing repository-specific: only the org-wide writers.
+		"site": {"carl", "erin", "olga"},
+	}
+	for repo, want := range cases {
+		if got := g.Writers(repo); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: writers = %v, want %v", repo, got, want)
+		}
+	}
+
+	// A base permission of write makes every member a writer everywhere.
+	s := org()
+	s.Org.DefaultRepoPermission = "write"
+	if got := Build(s).Writers("site"); !reflect.DeepEqual(got, []string{"carl", "dev", "erin", "olga", "pat"}) {
+		t.Errorf("base write: writers = %v", got)
+	}
+}

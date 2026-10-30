@@ -36,6 +36,7 @@ func (weakBranchProtection) Meta() check.CheckMeta {
 
 func (c weakBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.Finding {
 	gitlab := s.Provider == model.ProviderGitLab
+	bench := newReviewBench(s)
 	var out []model.Finding
 	for _, r := range activeRepos(s) {
 		// Each weakness is assessed independently on whatever detail was collected:
@@ -43,8 +44,10 @@ func (c weakBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.
 		// required-review (approval rules) is not, so they must not gate each other.
 		var weaknesses []string
 		// Requiring review only makes sense when a second person can approve; --solo
-		// or a <2-member group suppresses it (you cannot approve your own change).
-		if r.BranchReqPRReview != nil && !*r.BranchReqPRReview && reviewExpected(s) {
+		// or fewer than two people who can push suppresses it (you cannot approve
+		// your own change).
+		z := bench.of(r.Name)
+		if r.BranchReqPRReview != nil && !*r.BranchReqPRReview && z.reviewExpected() {
 			weaknesses = append(weaknesses, "no required pull-request review")
 		}
 		if r.BranchAllowForcePush != nil && *r.BranchAllowForcePush {
@@ -73,16 +76,16 @@ func (c weakBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.
 			Severity: model.SevHigh,
 			Axis:     model.AxisTeams,
 			Resource: repoResource(s, r),
-			Evidence: map[string]any{
+			Evidence: z.evidence(map[string]any{
 				"repo": r.Name, "default_branch": r.DefaultBranch,
 				"weaknesses": weaknesses, "protection_source": r.BranchProtectionSource,
-			},
+			}),
 			Description: "The default branch is protected, but the protection has gaps: changes can land without review, or history can be rewritten with a force-push. Either undermines the guarantee that what is on main was reviewed and is immutable.",
 			Remediation: remediation,
 			DocsURL:     docs,
 		}
 		if !gitlab && !byRuleset && branchProtectable(r.Private, s.Org.Plan) {
-			f = withFix(f, ghProtectBranch(s.Org.Login, r.Name, r.DefaultBranch, reviewExpected(s), !adminBypassExpected(s)))
+			f = withFix(f, ghProtectBranch(s.Org.Login, r.Name, r.DefaultBranch, z.reviewExpected(), !z.adminBypassExpected()))
 		}
 		out = append(out, f)
 	}
@@ -99,8 +102,9 @@ func (c weakBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.
 // own check also lets an org that deliberately keeps a break-glass path accept
 // exactly this one finding without silencing protection quality as a whole.
 //
-// Severity follows organization size. Below breakGlassThreshold the bypass is the
-// configuration scopeward itself suggests, so reporting it as a defect would mean
+// Severity follows the number of people who can push to the repository (see
+// reviewBench). Below breakGlassThreshold the bypass is the configuration
+// scopeward itself suggests, so reporting it as a defect would mean
 // penalizing an org for following the tool's own advice — an unclearable finding
 // with a lockout as the only way to clear it. There it drops to info: still
 // listed, worth zero penalty, phrased as something to revisit as the team grows.
@@ -119,19 +123,7 @@ func (bypassableBranchProtection) Meta() check.CheckMeta {
 }
 
 func (c bypassableBranchProtection) Run(_ context.Context, s *model.Snapshot) []model.Finding {
-	expected := adminBypassExpected(s)
-
-	title := " is bypassable by admins"
-	sev := model.SevMedium
-	desc := "The default branch is protected, but the protection is not enforced on administrators. Org owners and repo admins can push directly, bypassing review and force-push rules — including any bot or AI agent running with an admin token. The other branch checks report this repo as protected, so the gap is invisible in the rest of the report."
-	fix := "Enable \"Do not allow bypassing the above settings\" (enforce_admins) on the default branch. If admins deliberately keep a break-glass path, record that decision as an ignore rule with a reason rather than leaving it undocumented."
-	if expected {
-		title = " keeps an admin break-glass path"
-		sev = model.SevInfo
-		desc = fmt.Sprintf("The default branch is protected, but not for administrators: owners and repo admins can push directly. At %d member(s) — below the %d this tool treats as enough of a bench — that is the configuration scopeward itself suggests, because a required review plus no admin bypass would leave one person's absence blocking every change, including an urgent fix. Listed so the exposure is visible, not because it needs fixing today: anyone with admin, and any bot or agent holding an admin token, is outside the protection.", len(s.Members), breakGlassThreshold)
-		fix = fmt.Sprintf("Nothing to do while the team is this small. Revisit once there are %d or more members and a reviewer is reliably reachable: enable \"Do not allow bypassing the above settings\" (enforce_admins) then. In the meantime, keep the number of admins small, since admin is what the bypass is keyed to.", breakGlassThreshold)
-	}
-
+	bench := newReviewBench(s)
 	var out []model.Finding
 	var unassessed []string
 	for _, r := range activeRepos(s) {
@@ -148,13 +140,25 @@ func (c bypassableBranchProtection) Run(_ context.Context, s *model.Snapshot) []
 			}
 			continue
 		}
+		z := bench.of(r.Name)
+		expected := z.adminBypassExpected()
+		title := " is bypassable by admins"
+		sev := model.SevMedium
+		desc := "The default branch is protected, but the protection is not enforced on administrators. Org owners and repo admins can push directly, bypassing review and force-push rules — including any bot or AI agent running with an admin token. The other branch checks report this repo as protected, so the gap is invisible in the rest of the report."
+		fix := "Enable \"Do not allow bypassing the above settings\" (enforce_admins) on the default branch. If admins deliberately keep a break-glass path, record that decision as an ignore rule with a reason rather than leaving it undocumented."
+		if expected {
+			title = " keeps an admin break-glass path"
+			sev = model.SevInfo
+			desc = fmt.Sprintf("The default branch is protected, but not for administrators: owners and repo admins can push directly. With %s — below the %d this tool treats as enough of a bench — that is the configuration scopeward itself suggests, because a required review plus no admin bypass would leave one person's absence blocking every change, including an urgent fix. Listed so the exposure is visible, not because it needs fixing today: anyone with admin, and any bot or agent holding an admin token, is outside the protection.", z.people(), breakGlassThreshold)
+			fix = fmt.Sprintf("Nothing to do while the bench is this small. Revisit once %d or more people can push here and a reviewer is reliably reachable: enable \"Do not allow bypassing the above settings\" (enforce_admins) then. In the meantime, keep the number of admins small, since admin is what the bypass is keyed to.", breakGlassThreshold)
+		}
 		f := model.Finding{
 			CheckID:     c.Meta().ID,
 			Title:       "Protection on " + repoDisplay(s, r) + title,
 			Severity:    sev,
 			Axis:        model.AxisTeams,
 			Resource:    repoResource(s, r),
-			Evidence:    map[string]any{"repo": r.Name, "default_branch": r.DefaultBranch, "enforce_admins": false, "members": len(s.Members)},
+			Evidence:    z.evidence(map[string]any{"repo": r.Name, "default_branch": r.DefaultBranch, "enforce_admins": false}),
 			Description: desc,
 			Remediation: fix,
 			DocsURL:     "https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#include-administrators",
