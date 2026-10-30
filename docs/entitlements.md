@@ -63,7 +63,11 @@ hold it and an Enterprise org may not.
 1. A repository that already has push protection on **proves** the entitlement,
    at no API cost.
 2. Only when nothing proves it either way does `scopeward` ask the billing
-   endpoint.
+   endpoint. Seats purchased, committers in use or repositories consuming it
+   mean the org has it; nothing purchased and nothing in use means it does not.
+   That includes a metered org that could switch it on, because switching it
+   on is the purchase. The endpoint's `maximum_advanced_security_committers` is
+   what enabling it *would* bill, not a purchase, and counts as no evidence.
 3. If that cannot be answered (no `admin:org`, for instance) the result is
    *unknown* — and unknown reports everything. Withholding on a guess would hide
    exposure you can in fact fix.
