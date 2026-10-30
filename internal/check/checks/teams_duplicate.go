@@ -74,20 +74,29 @@ func (c duplicateRoster) Run(_ context.Context, s *model.Snapshot) []model.Findi
 	return out
 }
 
-// duplicateCandidates are the teams a pair can be drawn from: they must have
-// members to compare and grants to make the redundancy matter. A team with no
-// grants is already covered by teams.ghost, and one with no members by
-// teams.empty — reporting them here would double-count what those checks say
-// better.
+// duplicateCandidates are the teams a pair can be drawn from: they must have a
+// group of people to compare and grants to make the redundancy matter. A team
+// with no grants is already covered by teams.ghost, one with no members by
+// teams.empty, and one with a single member by teams.singleton — reporting them
+// here would double-count what those checks say better.
+//
+// The singleton case is not hypothetical. GitHub makes whoever creates a team
+// its maintainer, so a set of freshly created squad teams all share the same
+// one-person roster until people are added. Admitting them turned "create teams
+// per squad", which teams.size-tier-advice recommends, into C(n,2) high
+// findings (#101).
 func duplicateCandidates(teams []model.Team) []model.Team {
 	out := make([]model.Team, 0, len(teams))
 	for _, t := range teams {
-		if len(t.Members) > 0 && len(t.RepoGrants) > 0 {
+		if len(rosterOf(t)) >= minDuplicateRoster && len(t.RepoGrants) > 0 {
 			out = append(out, t)
 		}
 	}
 	return out
 }
+
+// minDuplicateRoster is the smallest roster that can be redundant with another.
+const minDuplicateRoster = 2
 
 // related reports whether two teams are in a parent/child relationship. Nesting
 // legitimately shares members — that is what it is for — so a parent and its
